@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "756178976224",
+    "project_id": "devboard-6c37e",
+    "storage_bucket": "devboard-6c37e.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:756178976224:android:2144ed8b5c1faf34cabf85",
+        "android_client_info": {
+          "package_name": "com.example.DevBoard"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBZUFCb8ifvbMW1eORrl9r7TenWOHQDqXw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

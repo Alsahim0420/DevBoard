@@ -1,0 +1,33 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Regla temporal más permisiva para debugging
+    // TODO: Hacer más restrictiva después de que funcione
+    
+    // Tableros (boards)
+    match /boards/{boardId} {
+      allow read, write: if request.auth != null;
+    }
+
+    // Épicas
+    match /epics/{epicId} {
+      allow read, write: if request.auth != null;
+    }
+
+    // Tareas
+    match /tasks/{taskId} {
+      allow read, write: if request.auth != null;
+    }
+
+    // Sprints
+    match /sprints/{sprintId} {
+      allow read, write: if request.auth != null;
+    }
+
+    // Usuario actual (perfil)
+    match /users/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+  }
+} 
