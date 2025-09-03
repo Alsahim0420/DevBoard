@@ -607,6 +607,78 @@ class _BacklogPageState extends State<BacklogPage> {
     }
   }
 
+  /// Persiste el nuevo orden de las tareas en Firebase
+  Future<void> _persistTaskOrder() async {
+    try {
+      // Actualizar el orden de las tareas en Firebase
+      for (int i = 0; i < _tasks.length; i++) {
+        await _dataSource.updateTaskOrder(_tasks[i].id, i);
+      }
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Orden actualizado'),
+            backgroundColor: Colors.green,
+            duration: Duration(seconds: 1),
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint('Error persisting task order: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error actualizando orden: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  /// Muestra modal para editar una tarea existente
+  Future<void> _showEditTaskModal(TaskModel task) async {
+    final result = await showModalBottomSheet<TaskModel>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => BacklogEditSheet(
+        task: task,
+        epics: _epics,
+        onSave: (updatedTask) async {
+          try {
+            await _dataSource.updateTask(updatedTask);
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Tarea actualizada exitosamente'),
+                  backgroundColor: Colors.green,
+                ),
+              );
+            }
+            return updatedTask;
+          } catch (e) {
+            debugPrint('Error updating task: $e');
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('Error actualizando tarea: $e'),
+                  backgroundColor: Colors.red,
+                ),
+              );
+            }
+            return null;
+          }
+        },
+      ),
+    );
+
+    if (result != null) {
+      // Recargar datos para reflejar cambios
+      _loadData();
+    }
+  }
+
   Future<void> _createEpic() async {
     if (_epicTitleController.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -984,54 +1056,103 @@ class _BacklogPageState extends State<BacklogPage> {
   Widget _buildTasksTable() {
     final isDark = context.read<ThemeBloc>().state.isDarkMode;
 
-    return SingleChildScrollView(
-      child: DataTable(
-        headingTextStyle: TextStyle(
-          fontWeight: FontWeight.bold,
-          color: isDark ? Colors.white : Colors.black87,
-        ),
-        dataTextStyle: TextStyle(
-          color: isDark ? Colors.white : Colors.black87,
-        ),
-        columns: const [
-          DataColumn(label: Text('')),
-          DataColumn(label: Text('ID')),
-          DataColumn(label: Text('Título')),
-          DataColumn(label: Text('Categoría')),
-          DataColumn(label: Text('Estado')),
-          DataColumn(label: Text('Tiempo')),
-          DataColumn(label: Text('Asignado')),
-          DataColumn(label: Text('')),
-        ],
-        rows: _tasks.map((task) {
-          final taskId = _generateTaskId();
-          final statusText = _getStatusText(task.status.toString());
-          final statusColor = _getStatusColor(task.status.toString());
-          final epic = _epics.firstWhere(
-            (epic) => epic.id == task.epicId,
-            orElse: () => _epics.first,
-          );
+    return ReorderableListView.builder(
+      itemCount: _tasks.length,
+      onReorder: (oldIndex, newIndex) {
+        if (newIndex > oldIndex) newIndex -= 1;
+        final item = _tasks.removeAt(oldIndex);
+        _tasks.insert(newIndex, item);
+        _persistTaskOrder();
+      },
+      itemBuilder: (context, index) {
+        final task = _tasks[index];
+        final taskId = _generateTaskId();
+        final statusText = _getStatusText(task.status.toString());
+        final statusColor = _getStatusColor(task.status.toString());
+        final epic = _epics.firstWhere(
+          (epic) => epic.id == task.epicId,
+          orElse: () => _epics.isNotEmpty
+              ? _epics.first
+              : EpicModel(
+                  id: 'default',
+                  title: 'Sin épica',
+                  description: '',
+                  boardId: _selectedBoardId,
+                  ownerId: 'system',
+                  createdAt: DateTime.now(),
+                  updatedAt: DateTime.now(),
+                ),
+        );
 
-          return DataRow(
-            cells: [
-              const DataCell(
-                Icon(
-                  Icons.check_box_outline_blank,
-                  color: Colors.blue,
-                  size: 20,
-                ),
-              ),
-              DataCell(Text(taskId)),
-              DataCell(
-                Container(
-                  constraints: const BoxConstraints(maxWidth: 200),
-                  child: Text(
-                    task.title,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-              ),
-              DataCell(
+        return _buildTaskListItem(
+          key: ValueKey(task.id),
+          task: task,
+          taskId: taskId,
+          statusText: statusText,
+          statusColor: statusColor,
+          epic: epic,
+          isDark: isDark,
+        );
+      },
+    );
+  }
+
+  Widget _buildTaskListItem({
+    required Key key,
+    required TaskModel task,
+    required String taskId,
+    required String statusText,
+    required Color statusColor,
+    required EpicModel epic,
+    required bool isDark,
+  }) {
+    return Container(
+      key: key,
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF2D2D2D) : Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: isDark ? Colors.grey.shade700 : Colors.grey.shade200,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(isDark ? 0.1 : 0.05),
+            blurRadius: 4,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: ListTile(
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        leading: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.drag_handle,
+              color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
+            ),
+            const SizedBox(width: 8),
+            Icon(
+              Icons.check_box_outline_blank,
+              color: Colors.blue,
+              size: 20,
+            ),
+          ],
+        ),
+        title: Text(
+          task.title,
+          style: TextStyle(
+            fontWeight: FontWeight.w600,
+            color: isDark ? Colors.white : Colors.black87,
+          ),
+        ),
+        subtitle: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const SizedBox(height: 4),
+            Row(
+              children: [
                 Container(
                   padding:
                       const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -1049,101 +1170,110 @@ class _BacklogPageState extends State<BacklogPage> {
                     ),
                   ),
                 ),
-              ),
-              DataCell(
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: statusColor.withOpacity(0.2),
-                        borderRadius: BorderRadius.circular(4),
-                        border: Border.all(color: statusColor),
-                      ),
-                      child: Text(
-                        statusText,
-                        style: TextStyle(
-                          color: statusColor,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 4),
-                    Icon(
-                      Icons.keyboard_arrow_down,
-                      color: statusColor,
-                      size: 16,
-                    ),
-                  ],
-                ),
-              ),
-              DataCell(Text(task.timeEstimate ?? '-')),
-              DataCell(
-                CircleAvatar(
-                  radius: 12,
-                  backgroundColor: Colors.grey.shade300,
+                const SizedBox(width: 8),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: statusColor.withOpacity(0.2),
+                    borderRadius: BorderRadius.circular(4),
+                    border: Border.all(color: statusColor),
+                  ),
                   child: Text(
-                    'U',
+                    statusText,
                     style: TextStyle(
+                      color: statusColor,
                       fontSize: 12,
-                      color: Colors.grey.shade700,
+                      fontWeight: FontWeight.w500,
                     ),
                   ),
                 ),
+              ],
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'ID: $taskId • Tiempo: ${task.timeEstimate ?? '-'}',
+              style: TextStyle(
+                fontSize: 12,
+                color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
               ),
-              DataCell(
-                PopupMenuButton<String>(
-                  icon: const Icon(Icons.more_vert, size: 16),
-                  onSelected: (value) async {
-                    if (value == 'delete') {
-                      // Mostrar diálogo de confirmación
-                      final confirmed = await showDialog<bool>(
-                        context: context,
-                        builder: (context) => AlertDialog(
-                          title: const Text('Confirmar eliminación'),
-                          content: Text(
-                              '¿Estás seguro de que quieres eliminar la tarea "${task.title}"?'),
-                          actions: [
-                            TextButton(
-                              onPressed: () => Navigator.of(context).pop(false),
-                              child: const Text('Cancelar'),
-                            ),
-                            TextButton(
-                              onPressed: () => Navigator.of(context).pop(true),
-                              style: TextButton.styleFrom(
-                                foregroundColor: Colors.red,
-                              ),
-                              child: const Text('Eliminar'),
-                            ),
-                          ],
-                        ),
-                      );
-
-                      if (confirmed == true) {
-                        await _deleteTask(task.id);
-                      }
-                    }
-                  },
-                  itemBuilder: (context) => [
-                    const PopupMenuItem<String>(
-                      value: 'delete',
-                      child: Row(
-                        children: [
-                          Icon(Icons.delete, color: Colors.red, size: 16),
-                          SizedBox(width: 8),
-                          Text('Eliminar tarea'),
-                        ],
-                      ),
-                    ),
-                  ],
+            ),
+          ],
+        ),
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            CircleAvatar(
+              radius: 12,
+              backgroundColor: Colors.grey.shade300,
+              child: Text(
+                'U',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Colors.grey.shade700,
                 ),
               ),
-            ],
-          );
-        }).toList(),
+            ),
+            const SizedBox(width: 8),
+            PopupMenuButton<String>(
+              icon: const Icon(Icons.more_vert, size: 16),
+              onSelected: (value) async {
+                if (value == 'edit') {
+                  await _showEditTaskModal(task);
+                } else if (value == 'delete') {
+                  final confirmed = await showDialog<bool>(
+                    context: context,
+                    builder: (context) => AlertDialog(
+                      title: const Text('Confirmar eliminación'),
+                      content: Text(
+                          '¿Estás seguro de que quieres eliminar la tarea "${task.title}"?'),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.of(context).pop(false),
+                          child: const Text('Cancelar'),
+                        ),
+                        TextButton(
+                          onPressed: () => Navigator.of(context).pop(true),
+                          style: TextButton.styleFrom(
+                            foregroundColor: Colors.red,
+                          ),
+                          child: const Text('Eliminar'),
+                        ),
+                      ],
+                    ),
+                  );
+
+                  if (confirmed == true) {
+                    await _deleteTask(task.id);
+                  }
+                }
+              },
+              itemBuilder: (context) => [
+                const PopupMenuItem<String>(
+                  value: 'edit',
+                  child: Row(
+                    children: [
+                      Icon(Icons.edit, color: Colors.blue, size: 16),
+                      SizedBox(width: 8),
+                      Text('Editar tarea'),
+                    ],
+                  ),
+                ),
+                const PopupMenuItem<String>(
+                  value: 'delete',
+                  child: Row(
+                    children: [
+                      Icon(Icons.delete, color: Colors.red, size: 16),
+                      SizedBox(width: 8),
+                      Text('Eliminar tarea'),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+        onTap: () => _showEditTaskModal(task),
       ),
     );
   }
@@ -2208,5 +2338,322 @@ class _BacklogPageState extends State<BacklogPage> {
     _sprintNameController.dispose();
     _sprintGoalController.dispose();
     super.dispose();
+  }
+}
+
+/// Widget para editar tareas en el backlog
+class BacklogEditSheet extends StatefulWidget {
+  final TaskModel task;
+  final List<EpicModel> epics;
+  final Future<TaskModel?> Function(TaskModel) onSave;
+
+  const BacklogEditSheet({
+    super.key,
+    required this.task,
+    required this.epics,
+    required this.onSave,
+  });
+
+  @override
+  State<BacklogEditSheet> createState() => _BacklogEditSheetState();
+}
+
+class _BacklogEditSheetState extends State<BacklogEditSheet> {
+  late final TextEditingController _titleController;
+  late final TextEditingController _descriptionController;
+  late final TextEditingController _timeEstimateController;
+  late String _selectedEpicId;
+  late TaskPriority _selectedPriority;
+  late TaskStatus _selectedStatus;
+  bool _isSaving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _titleController = TextEditingController(text: widget.task.title);
+    _descriptionController =
+        TextEditingController(text: widget.task.description);
+    _timeEstimateController =
+        TextEditingController(text: widget.task.timeEstimate ?? '');
+    _selectedEpicId = widget.task.epicId;
+    _selectedPriority = widget.task.priority;
+    _selectedStatus = widget.task.status;
+  }
+
+  @override
+  void dispose() {
+    _titleController.dispose();
+    _descriptionController.dispose();
+    _timeEstimateController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = context.read<ThemeBloc>().state.isDarkMode;
+
+    return Container(
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF2D2D2D) : Colors.white,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      child: Padding(
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.of(context).viewInsets.bottom,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Handle bar
+            Container(
+              margin: const EdgeInsets.only(top: 12),
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: isDark ? Colors.grey.shade600 : Colors.grey.shade300,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+
+            // Header
+            Padding(
+              padding: const EdgeInsets.all(20),
+              child: Row(
+                children: [
+                  Text(
+                    'Editar Tarea',
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                      color: isDark ? Colors.white : Colors.black87,
+                    ),
+                  ),
+                  const Spacer(),
+                  IconButton(
+                    onPressed: () => Navigator.pop(context),
+                    icon: Icon(
+                      Icons.close,
+                      color:
+                          isDark ? Colors.grey.shade400 : Colors.grey.shade600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            // Form
+            Flexible(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Título
+                    TextField(
+                      controller: _titleController,
+                      decoration: InputDecoration(
+                        labelText: 'Título *',
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      maxLines: 2,
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Descripción
+                    TextField(
+                      controller: _descriptionController,
+                      decoration: InputDecoration(
+                        labelText: 'Descripción',
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      maxLines: 3,
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Tiempo estimado
+                    TextField(
+                      controller: _timeEstimateController,
+                      decoration: InputDecoration(
+                        labelText: 'Tiempo estimado (ej: 2h, 1d)',
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Épica
+                    DropdownButtonFormField<String>(
+                      value: _selectedEpicId,
+                      decoration: InputDecoration(
+                        labelText: 'Épica',
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      items: widget.epics.map((epic) {
+                        return DropdownMenuItem<String>(
+                          value: epic.id,
+                          child: Text(epic.title),
+                        );
+                      }).toList(),
+                      onChanged: (value) {
+                        if (value != null) {
+                          setState(() => _selectedEpicId = value);
+                        }
+                      },
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Prioridad
+                    DropdownButtonFormField<TaskPriority>(
+                      value: _selectedPriority,
+                      decoration: InputDecoration(
+                        labelText: 'Prioridad',
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      items: TaskPriority.values.map((priority) {
+                        return DropdownMenuItem<TaskPriority>(
+                          value: priority,
+                          child: Text(_getPriorityText(priority)),
+                        );
+                      }).toList(),
+                      onChanged: (value) {
+                        if (value != null) {
+                          setState(() => _selectedPriority = value);
+                        }
+                      },
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Estado
+                    DropdownButtonFormField<TaskStatus>(
+                      value: _selectedStatus,
+                      decoration: InputDecoration(
+                        labelText: 'Estado',
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      items: TaskStatus.values.map((status) {
+                        return DropdownMenuItem<TaskStatus>(
+                          value: status,
+                          child: Text(_getStatusText(status.toString())),
+                        );
+                      }).toList(),
+                      onChanged: (value) {
+                        if (value != null) {
+                          setState(() => _selectedStatus = value);
+                        }
+                      },
+                    ),
+                    const SizedBox(height: 24),
+
+                    // Botones
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton(
+                            onPressed:
+                                _isSaving ? null : () => Navigator.pop(context),
+                            child: const Text('Cancelar'),
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: FilledButton(
+                            onPressed: _isSaving ? null : _saveTask,
+                            child: _isSaving
+                                ? const SizedBox(
+                                    height: 20,
+                                    width: 20,
+                                    child: CircularProgressIndicator(
+                                        strokeWidth: 2),
+                                  )
+                                : const Text('Guardar'),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 20),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _getPriorityText(TaskPriority priority) {
+    switch (priority) {
+      case TaskPriority.low:
+        return 'Baja';
+      case TaskPriority.medium:
+        return 'Media';
+      case TaskPriority.high:
+        return 'Alta';
+      case TaskPriority.critical:
+        return 'Crítica';
+    }
+  }
+
+  String _getStatusText(String status) {
+    switch (status) {
+      case 'TaskStatus.todo':
+        return 'To Do';
+      case 'TaskStatus.inProgress':
+        return 'In Progress';
+      case 'TaskStatus.done':
+        return 'Done';
+      default:
+        return status.replaceAll('TaskStatus.', '');
+    }
+  }
+
+  Future<void> _saveTask() async {
+    if (_titleController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('El título es obligatorio'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    setState(() => _isSaving = true);
+
+    try {
+      final updatedTask = widget.task.copyWith(
+        title: _titleController.text.trim(),
+        description: _descriptionController.text.trim().isEmpty
+            ? null
+            : _descriptionController.text.trim(),
+        timeEstimate: _timeEstimateController.text.trim().isEmpty
+            ? null
+            : _timeEstimateController.text.trim(),
+        epicId: _selectedEpicId,
+        priority: _selectedPriority,
+        status: _selectedStatus,
+        updatedAt: DateTime.now(),
+      );
+
+      final result = await widget.onSave(updatedTask);
+      if (result != null && mounted) {
+        Navigator.pop(context, result);
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isSaving = false);
+      }
+    }
   }
 }

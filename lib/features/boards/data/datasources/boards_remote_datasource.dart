@@ -338,6 +338,14 @@ class BoardsRemoteDataSource {
         .update(task.toFirestore());
   }
 
+  // Actualizar orden de tarea
+  Future<void> updateTaskOrder(String taskId, int order) async {
+    await _firestore.collection('tasks').doc(taskId).update({
+      'order': order,
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
+  }
+
   // Actualizar estado de tarea
   Future<void> updateTaskStatus(String taskId, TaskStatus newStatus) async {
     await _firestore.collection('tasks').doc(taskId).update({

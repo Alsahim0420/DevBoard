@@ -412,7 +412,10 @@ class _BoardScreenState extends State<BoardScreen> {
       debugPrint('✅ Tarea actualizada exitosamente en Firebase');
       debugPrint('   - Custom status name: ${boardStatus.name}');
 
+      // Recargar las tareas para reflejar el cambio
       if (mounted) {
+        _loadAllBoardTasks();
+
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Row(
@@ -2291,15 +2294,30 @@ class _BoardScreenState extends State<BoardScreen> {
           _buildKanbanColumnHeader(boardStatus, tasks.length),
           Expanded(
             child: DragTarget<TaskModel>(
-              onWillAcceptWithDetails: (details) => true,
+              onWillAcceptWithDetails: (details) {
+                // Permitir drop si la tarea no está ya en esta columna
+                return details.data.status.toString() != boardStatus.status;
+              },
               onAcceptWithDetails: (details) {
                 // Actualizar el estado de la tarea cuando se arrastra a esta columna
-                // Para estados personalizados, usar el nombre del estado en lugar del enum
                 _updateTaskStatusWithCustomStatus(details.data.id, boardStatus);
               },
               builder: (context, candidateData, rejectedData) {
+                final isDragOver = candidateData.isNotEmpty;
                 return Container(
                   padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(12),
+                    border: isDragOver
+                        ? Border.all(
+                            color: boardStatus.color.withOpacity(0.8),
+                            width: 2,
+                          )
+                        : null,
+                    color: isDragOver
+                        ? boardStatus.color.withOpacity(0.1)
+                        : Colors.transparent,
+                  ),
                   child: SingleChildScrollView(
                     child: Column(
                       children: [
@@ -2309,12 +2327,17 @@ class _BoardScreenState extends State<BoardScreen> {
                           Container(
                             padding: const EdgeInsets.all(32),
                             child: Text(
-                              'Sin tareas',
+                              isDragOver ? 'Soltar aquí' : 'Sin tareas',
                               style: TextStyle(
-                                color: isDark
-                                    ? Colors.grey.shade400
-                                    : Colors.grey.shade500,
+                                color: isDragOver
+                                    ? boardStatus.color
+                                    : isDark
+                                        ? Colors.grey.shade400
+                                        : Colors.grey.shade500,
                                 fontSize: 14,
+                                fontWeight: isDragOver
+                                    ? FontWeight.w600
+                                    : FontWeight.normal,
                               ),
                             ),
                           ),
@@ -2395,51 +2418,62 @@ class _BoardScreenState extends State<BoardScreen> {
 
   Widget _buildDraggableTaskCard(TaskModel task, int columnIndex) {
     final isDark = context.read<ThemeBloc>().state.isDarkMode;
-    return Draggable<TaskModel>(
-      data: task,
-      feedback: Material(
-        elevation: 8,
-        borderRadius: BorderRadius.circular(12),
-        child: Container(
-          width: 200,
+    return Tooltip(
+      message: 'Mantén presionado para arrastrar',
+      child: LongPressDraggable<TaskModel>(
+        data: task,
+        dragAnchorStrategy: pointerDragAnchorStrategy,
+        feedback: Material(
+          elevation: 12,
+          borderRadius: BorderRadius.circular(12),
+          child: Container(
+            width: 200,
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: isDark ? const Color(0xFF2D2D2D) : Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                  color: isDark ? Colors.grey.shade600 : Colors.grey.shade200),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.3),
+                  blurRadius: 8,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: Text(
+              task.title,
+              style: TextStyle(
+                fontWeight: FontWeight.w600,
+                fontSize: 14,
+                color: isDark ? Colors.white : Colors.black87,
+              ),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ),
+        childWhenDragging: Container(
+          margin: const EdgeInsets.all(8),
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: isDark ? const Color(0xFF2D2D2D) : Colors.white,
+            color: isDark ? Colors.grey.shade800 : Colors.grey.shade100,
             borderRadius: BorderRadius.circular(12),
             border: Border.all(
-                color: isDark ? Colors.grey.shade600 : Colors.grey.shade200),
+                color: isDark ? Colors.grey.shade600 : Colors.grey.shade300,
+                style: BorderStyle.solid),
           ),
           child: Text(
-            task.title,
+            'Arrastrando...',
             style: TextStyle(
-              fontWeight: FontWeight.w600,
+              color: isDark ? Colors.grey.shade300 : Colors.grey.shade500,
               fontSize: 14,
-              color: isDark ? Colors.white : Colors.black87,
             ),
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
           ),
         ),
+        child: _buildTaskCard(task, columnIndex),
       ),
-      childWhenDragging: Container(
-        margin: const EdgeInsets.all(8),
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: isDark ? Colors.grey.shade800 : Colors.grey.shade100,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-              color: isDark ? Colors.grey.shade600 : Colors.grey.shade300,
-              style: BorderStyle.solid),
-        ),
-        child: Text(
-          'Arrastrando...',
-          style: TextStyle(
-            color: isDark ? Colors.grey.shade300 : Colors.grey.shade500,
-            fontSize: 14,
-          ),
-        ),
-      ),
-      child: _buildTaskCard(task, columnIndex),
     );
   }
 
@@ -2484,13 +2518,26 @@ class _BoardScreenState extends State<BoardScreen> {
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
-                    Container(
-                      width: 8,
-                      height: 8,
-                      decoration: BoxDecoration(
-                        color: Color(task.priorityColor),
-                        shape: BoxShape.circle,
-                      ),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.drag_handle,
+                          size: 16,
+                          color: isDark
+                              ? Colors.grey.shade400
+                              : Colors.grey.shade500,
+                        ),
+                        const SizedBox(width: 8),
+                        Container(
+                          width: 8,
+                          height: 8,
+                          decoration: BoxDecoration(
+                            color: Color(task.priorityColor),
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),

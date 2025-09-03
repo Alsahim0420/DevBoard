@@ -1,6 +1,8 @@
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../models/user_model.dart';
 import '../../domain/entities/auth_credentials.dart';
+import 'web_storage_helper.dart';
 
 abstract class AuthRemoteDataSource {
   Stream<UserModel?> get authStateChanges;
@@ -66,7 +68,19 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
   @override
   Future<void> signOut() async {
     try {
+      // 1. Cerrar sesión en Firebase
       await _auth.signOut();
+
+      // 2. Limpiar SharedPreferences
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove('auth_token');
+      await prefs.remove('uid');
+      await prefs.remove('user_email');
+      await prefs.remove('user_name');
+      await prefs.clear(); // Limpiar todas las preferencias
+
+      // 3. Limpiar localStorage en web
+      await WebStorageHelper.clearLocalStorage();
     } on FirebaseAuthException catch (e) {
       throw _handleAuthException(e);
     }
