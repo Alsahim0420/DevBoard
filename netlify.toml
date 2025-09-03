@@ -4,8 +4,8 @@
     set -e
     export FLUTTER_VERSION=${FLUTTER_VERSION:-3.24.5}
     
-    # Verificar si la rama empieza con 'release' o si es deploy-preview
-    if [[ "$BRANCH" =~ ^release ]] || [[ "$CONTEXT" == "deploy-preview" ]]; then
+    # Verificar si la rama empieza con 'release', es 'main' o si es deploy-preview
+    if [[ "$BRANCH" =~ ^release ]] || [[ "$BRANCH" == "main" ]] || [[ "$CONTEXT" == "deploy-preview" ]]; then
       echo "Building for branch: $BRANCH, context: $CONTEXT"
       
       # Descargar Flutter para Linux
@@ -23,7 +23,7 @@
       flutter pub get
       flutter build web --release
     else
-      echo "Skipping build for branch: $BRANCH, context: $CONTEXT (not a release branch or deploy-preview)"
+      echo "Skipping build for branch: $BRANCH, context: $CONTEXT (not main, release branch or deploy-preview)"
       exit 0
     fi
   """
