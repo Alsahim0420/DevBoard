@@ -2626,13 +2626,13 @@ class _BoardScreenState extends State<BoardScreen> {
                       padding: const EdgeInsets.symmetric(
                           horizontal: 8, vertical: 4),
                       decoration: BoxDecoration(
-                        color: _getStatusColor(task.status).withOpacity(0.1),
+                        color: _getStatusColorForTask(task).withOpacity(0.1),
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: Text(
                         task.customStatusName ?? task.statusText,
                         style: TextStyle(
-                          color: _getStatusColor(task.status),
+                          color: _getStatusColorForTask(task),
                           fontSize: 12,
                           fontWeight: FontWeight.w500,
                         ),
@@ -2669,26 +2669,23 @@ class _BoardScreenState extends State<BoardScreen> {
     );
   }
 
-  Color _getStatusColor(TaskStatus status) {
-    // Buscar el estado personalizado correspondiente basado en el customStatusName
-    // de las tareas actuales
-    for (var task in _tasks) {
-      if (task.customStatusName != null && task.customStatusName!.isNotEmpty) {
-        final customStatus = _boardStatuses.firstWhere(
-          (boardStatus) =>
-              boardStatus.name.toLowerCase() ==
-              task.customStatusName!.toLowerCase(),
-          orElse: () => BoardStatus('', 'todo', Colors.grey),
-        );
+  Color _getStatusColorForTask(TaskModel task) {
+    // Si la tarea tiene un customStatusName, buscar el color correspondiente
+    if (task.customStatusName != null && task.customStatusName!.isNotEmpty) {
+      final customStatus = _boardStatuses.firstWhere(
+        (boardStatus) =>
+            boardStatus.name.toLowerCase() ==
+            task.customStatusName!.toLowerCase(),
+        orElse: () => BoardStatus('', 'todo', Colors.grey),
+      );
 
-        if (customStatus.name.isNotEmpty) {
-          return customStatus.color;
-        }
+      if (customStatus.name.isNotEmpty) {
+        return customStatus.color;
       }
     }
 
-    // Si no se encontró, usar colores por defecto
-    switch (status) {
+    // Si no se encontró un estado personalizado, usar colores por defecto
+    switch (task.status) {
       case TaskStatus.todo:
         return Colors.red.shade600;
       case TaskStatus.inProgress:

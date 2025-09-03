@@ -1,21 +1,25 @@
 [build]
+  publish = "build/web"
   command = """
+    set -e
+    export FLUTTER_VERSION=${FLUTTER_VERSION:-3.24.5}
+    
     # Verificar si la rama empieza con 'release' o si es deploy-preview
     if [[ "$BRANCH" =~ ^release ]] || [[ "$CONTEXT" == "deploy-preview" ]]; then
-      # Descargar e instalar Flutter
-      curl -o flutter_linux.tar.xz https://storage.googleapis.com/flutter_infra_release/releases/stable/linux/flutter_linux_3.32.7-stable.tar.xz
-      tar xf flutter_linux.tar.xz
-      export PATH="$PATH:$PWD/flutter/bin"
+      echo "Building for branch: $BRANCH, context: $CONTEXT"
       
-      # Configurar cache de pub
+      # Descargar Flutter para Linux
+      curl -L -o flutter.tar.xz \
+        https://storage.googleapis.com/flutter_infra_release/releases/stable/linux/flutter_linux_${FLUTTER_VERSION}-stable.tar.xz
+      tar -xJf flutter.tar.xz
+      export PATH="$PATH:`pwd`/flutter/bin"
+      
+      # Cache pub para acelerar builds
       export PUB_CACHE="/opt/buildhome/.pub-cache"
       mkdir -p $PUB_CACHE
-      
-      # Verificar versión y configurar Flutter
+
       flutter --version
       flutter config --enable-web
-      
-      # Instalar dependencias y construir
       flutter pub get
       flutter build web --release
     else
@@ -23,32 +27,31 @@
       exit 0
     fi
   """
-  publish = "build/web"
 
 [build.environment]
-  FLUTTER_VERSION = "3.32.7"
+  FLUTTER_VERSION = "3.24.5"
   PUB_CACHE = "/opt/buildhome/.pub-cache"
 
-# Configuración para ignorar builds en ciertas ramas
-# Solo construir en ramas que empiecen con 'release' o en deploy-preview
-
+# Configuración para deploy-preview (PRs)
 [context.deploy-preview]
   command = """
-    # Para deploy-preview siempre construir
-    # Descargar e instalar Flutter
-    curl -o flutter_linux.tar.xz https://storage.googleapis.com/flutter_infra_release/releases/stable/linux/flutter_linux_3.32.7-stable.tar.xz
-    tar xf flutter_linux.tar.xz
-    export PATH="$PATH:$PWD/flutter/bin"
+    set -e
+    export FLUTTER_VERSION=${FLUTTER_VERSION:-3.24.5}
     
-    # Configurar cache de pub
+    echo "Building deploy-preview for branch: $BRANCH"
+    
+    # Descargar Flutter para Linux
+    curl -L -o flutter.tar.xz \
+      https://storage.googleapis.com/flutter_infra_release/releases/stable/linux/flutter_linux_${FLUTTER_VERSION}-stable.tar.xz
+    tar -xJf flutter.tar.xz
+    export PATH="$PATH:`pwd`/flutter/bin"
+    
+    # Cache pub para acelerar builds
     export PUB_CACHE="/opt/buildhome/.pub-cache"
     mkdir -p $PUB_CACHE
-    
-    # Verificar versión y configurar Flutter
+
     flutter --version
     flutter config --enable-web
-    
-    # Instalar dependencias y construir
     flutter pub get
     flutter build web --release
   """
