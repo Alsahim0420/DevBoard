@@ -1,0 +1,87 @@
+[build]
+  command = """
+    # Verificar si la rama empieza con 'release' o si es deploy-preview
+    if [[ "$BRANCH" =~ ^release ]] || [[ "$CONTEXT" == "deploy-preview" ]]; then
+      # Descargar e instalar Flutter
+      curl -o flutter_linux.tar.xz https://storage.googleapis.com/flutter_infra_release/releases/stable/linux/flutter_linux_3.32.7-stable.tar.xz
+      tar xf flutter_linux.tar.xz
+      export PATH="$PATH:$PWD/flutter/bin"
+      
+      # Configurar cache de pub
+      export PUB_CACHE="/opt/buildhome/.pub-cache"
+      mkdir -p $PUB_CACHE
+      
+      # Verificar versión y configurar Flutter
+      flutter --version
+      flutter config --enable-web
+      
+      # Instalar dependencias y construir
+      flutter pub get
+      flutter build web --release
+    else
+      echo "Skipping build for branch: $BRANCH, context: $CONTEXT (not a release branch or deploy-preview)"
+      exit 0
+    fi
+  """
+  publish = "build/web"
+
+[build.environment]
+  FLUTTER_VERSION = "3.32.7"
+  PUB_CACHE = "/opt/buildhome/.pub-cache"
+
+# Configuración para ignorar builds en ciertas ramas
+# Solo construir en ramas que empiecen con 'release' o en deploy-preview
+
+[context.deploy-preview]
+  command = """
+    # Para deploy-preview siempre construir
+    # Descargar e instalar Flutter
+    curl -o flutter_linux.tar.xz https://storage.googleapis.com/flutter_infra_release/releases/stable/linux/flutter_linux_3.32.7-stable.tar.xz
+    tar xf flutter_linux.tar.xz
+    export PATH="$PATH:$PWD/flutter/bin"
+    
+    # Configurar cache de pub
+    export PUB_CACHE="/opt/buildhome/.pub-cache"
+    mkdir -p $PUB_CACHE
+    
+    # Verificar versión y configurar Flutter
+    flutter --version
+    flutter config --enable-web
+    
+    # Instalar dependencias y construir
+    flutter pub get
+    flutter build web --release
+  """
+  publish = "build/web"
+
+# Configuración de redirecciones para SPA
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
+# Headers de seguridad
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Frame-Options = "DENY"
+    X-XSS-Protection = "1; mode=block"
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+
+# Cache para assets estáticos
+[[headers]]
+  for = "/assets/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+# Cache para archivos JS y CSS
+[[headers]]
+  for = "/*.js"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+[[headers]]
+  for = "/*.css"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
