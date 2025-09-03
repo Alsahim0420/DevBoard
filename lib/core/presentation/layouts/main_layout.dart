@@ -382,12 +382,20 @@ class _ThemeSwitchItem extends StatelessWidget {
           ),
           child: ListTile(
             leading: Icon(
-              themeState.isDarkMode ? Icons.dark_mode : Icons.light_mode,
+              themeState.isSystemMode
+                  ? Icons.brightness_auto
+                  : themeState.isDarkMode
+                      ? Icons.dark_mode
+                      : Icons.light_mode,
               color: isDark ? Colors.grey.shade300 : Colors.grey.shade700,
               size: 20,
             ),
             title: Text(
-              'Tema ${themeState.isDarkMode ? 'Oscuro' : 'Claro'}',
+              themeState.isSystemMode
+                  ? 'Tema del Sistema'
+                  : themeState.isDarkMode
+                      ? 'Tema Oscuro'
+                      : 'Tema Claro',
               style: TextStyle(
                 color: isDark ? Colors.white : Colors.black,
                 fontWeight: FontWeight.normal,
@@ -395,20 +403,25 @@ class _ThemeSwitchItem extends StatelessWidget {
               ),
             ),
             trailing: Container(
-              width: 48,
+              width: 60,
               height: 24,
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(12),
                 gradient: LinearGradient(
-                  colors: themeState.isDarkMode
+                  colors: themeState.isSystemMode
                       ? [
-                          Colors.purple.shade400,
-                          Colors.purple.shade600,
+                          Colors.blue.shade400,
+                          Colors.blue.shade600,
                         ]
-                      : [
-                          Colors.orange.shade300,
-                          Colors.orange.shade500,
-                        ],
+                      : themeState.isDarkMode
+                          ? [
+                              Colors.purple.shade400,
+                              Colors.purple.shade600,
+                            ]
+                          : [
+                              Colors.orange.shade300,
+                              Colors.orange.shade500,
+                            ],
                 ),
               ),
               child: Stack(
@@ -424,9 +437,11 @@ class _ThemeSwitchItem extends StatelessWidget {
                   ),
                   // Switch thumb
                   AnimatedAlign(
-                    alignment: themeState.isDarkMode
-                        ? Alignment.centerRight
-                        : Alignment.centerLeft,
+                    alignment: themeState.isSystemMode
+                        ? Alignment.center
+                        : themeState.isDarkMode
+                            ? Alignment.centerRight
+                            : Alignment.centerLeft,
                     duration: const Duration(milliseconds: 300),
                     curve: Curves.easeInOut,
                     child: Container(

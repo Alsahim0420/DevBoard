@@ -13,6 +13,8 @@ class TaskCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -22,17 +24,23 @@ class TaskCard extends StatelessWidget {
           margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 2),
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: isDark ? const Color(0xFF2D2D2D) : Colors.white,
             borderRadius: BorderRadius.circular(8),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.06),
+                color: isDark
+                    ? Colors.black.withOpacity(0.3)
+                    : Colors.black.withOpacity(0.06),
                 blurRadius: 2,
                 offset: const Offset(0, 1),
               ),
             ],
             border: Border.all(
-              color: task.isOverdue ? Colors.red : Colors.grey.shade300,
+              color: task.isOverdue
+                  ? Colors.red
+                  : isDark
+                      ? Colors.grey.shade600
+                      : Colors.grey.shade300,
               width: 1,
             ),
           ),
@@ -44,9 +52,10 @@ class TaskCard extends StatelessWidget {
                   Expanded(
                     child: Text(
                       task.title,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontWeight: FontWeight.bold,
                         fontSize: 16,
+                        color: isDark ? Colors.white : Colors.black87,
                       ),
                     ),
                   ),
@@ -73,15 +82,19 @@ class TaskCard extends StatelessWidget {
                 const SizedBox(height: 6),
                 Row(
                   children: [
-                    const Icon(Icons.calendar_today,
-                        size: 14, color: Colors.grey),
+                    Icon(Icons.calendar_today,
+                        size: 14,
+                        color: isDark ? Colors.grey.shade400 : Colors.grey),
                     const SizedBox(width: 4),
                     Text(
                       _formatDate(task.dueDate!),
                       style: TextStyle(
                         fontSize: 13,
-                        color:
-                            task.isOverdue ? Colors.red : Colors.grey.shade700,
+                        color: task.isOverdue
+                            ? Colors.red
+                            : isDark
+                                ? Colors.grey.shade300
+                                : Colors.grey.shade700,
                       ),
                     ),
                   ],

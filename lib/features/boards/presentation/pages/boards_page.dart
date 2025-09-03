@@ -1,12 +1,17 @@
 // ignore_for_file: use_build_context_synchronously
 
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../../../auth/presentation/bloc/auth_bloc.dart';
 import '../../../auth/presentation/bloc/auth_state.dart';
 import '../../../auth/presentation/widgets/glassmorphism_container.dart';
 import '../../data/models/board_model.dart';
+import '../../data/models/team_model.dart';
 import '../../data/datasources/boards_remote_datasource.dart';
+import '../../data/datasources/teams_remote_datasource.dart';
 import 'board_screen.dart';
 import '../../../../core/presentation/bloc/theme_bloc.dart';
 import '../../../../core/presentation/bloc/modal_bloc.dart';
@@ -20,6 +25,7 @@ class BoardsPage extends StatefulWidget {
 
 class _BoardsPageState extends State<BoardsPage> {
   final BoardsRemoteDataSource _dataSource = BoardsRemoteDataSource();
+  final TeamsRemoteDataSource _teamsDataSource = TeamsRemoteDataSource();
   final TextEditingController _boardNameController = TextEditingController();
   final TextEditingController _boardDescriptionController =
       TextEditingController();
@@ -29,17 +35,144 @@ class _BoardsPageState extends State<BoardsPage> {
   bool _showCreateModal = false;
   bool _isInitialLoading = true; // Nuevo estado para carga inicial
 
+  // Variables para manejo de equipos
+  List<TeamModel> _teams = [];
+  String? _selectedTeamId;
+
+  // Stream subscriptions para cancelar cuando el usuario se desautentica
+  StreamSubscription<List<BoardModel>>? _boardsSubscription;
+  StreamSubscription<List<TeamModel>>? _teamsSubscription;
+  StreamSubscription<User?>? _authStateSubscription;
+
+  // Función auxiliar para mostrar SnackBar de manera segura
+  void _showSafeSnackBar(String message, {Color backgroundColor = Colors.red}) {
+    if (mounted && context.mounted) {
+      try {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(message),
+            backgroundColor: backgroundColor,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      } catch (e) {
+        debugPrint('Error showing snackbar: $e');
+      }
+    }
+  }
+
   @override
   void initState() {
     super.initState();
+    _setupAuthListener();
     _loadBoards();
+    _loadTeams();
+  }
+
+  void _setupAuthListener() {
+    _authStateSubscription =
+        FirebaseAuth.instance.authStateChanges().listen((User? user) {
+      if (user == null) {
+        // Usuario se desautenticó, cancelar todas las suscripciones
+        _cancelAllSubscriptions();
+        if (mounted) {
+          setState(() {
+            _boards = [];
+            _teams = [];
+            _isInitialLoading = true;
+          });
+        }
+      }
+    });
+  }
+
+  void _cancelAllSubscriptions() {
+    _boardsSubscription?.cancel();
+    _teamsSubscription?.cancel();
+    _boardsSubscription = null;
+    _teamsSubscription = null;
+  }
+
+  @override
+  void dispose() {
+    _cancelAllSubscriptions();
+    _authStateSubscription?.cancel();
+    _boardNameController.dispose();
+    _boardDescriptionController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadTeams() async {
+    // Cancelar suscripción anterior si existe
+    _teamsSubscription?.cancel();
+
+    try {
+      final user = context.read<AuthBloc>().state;
+      if (user is Authenticated) {
+        // Verificar que el usuario esté realmente autenticado en Firebase
+        final currentUser = FirebaseAuth.instance.currentUser;
+        if (currentUser == null) {
+          debugPrint(
+              'ERROR: Firebase current user is null but AuthBloc says user is authenticated');
+          return;
+        }
+
+        // Obtener el teamId del usuario actual
+        final userTeamId = await _getUserTeamId(user.user.id);
+
+        // Cargar todos los equipos donde el usuario es miembro
+        _teamsSubscription = _teamsDataSource.getTeams().listen((teams) {
+          if (mounted) {
+            setState(() {
+              _teams = teams;
+              // Si el usuario tiene un equipo, seleccionarlo por defecto
+              if (userTeamId != null && _selectedTeamId == null) {
+                _selectedTeamId = userTeamId;
+              }
+            });
+          }
+        });
+      }
+    } catch (e) {
+      debugPrint('Error loading teams: $e');
+    }
+  }
+
+  Future<String?> _getUserTeamId(String userId) async {
+    try {
+      final userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(userId)
+          .get();
+
+      if (userDoc.exists) {
+        final userData = userDoc.data()!;
+        return userData['teamId'] as String?;
+      }
+      return null;
+    } catch (e) {
+      debugPrint('Error getting user teamId: $e');
+      return null;
+    }
   }
 
   void _loadBoards() {
+    // Cancelar suscripción anterior si existe
+    _boardsSubscription?.cancel();
+
     final user = context.read<AuthBloc>().state;
     if (user is Authenticated) {
       debugPrint('Loading boards for user: ${user.user.id}');
-      _dataSource.getUserBoards(user.user.id).listen(
+
+      // Verificar que el usuario esté realmente autenticado en Firebase
+      final currentUser = FirebaseAuth.instance.currentUser;
+      if (currentUser == null) {
+        debugPrint(
+            'ERROR: Firebase current user is null but AuthBloc says user is authenticated');
+        return;
+      }
+
+      _boardsSubscription = _dataSource.getUserBoards(user.user.id).listen(
         (boards) {
           debugPrint('Loaded ${boards.length} boards');
           if (mounted) {
@@ -51,37 +184,18 @@ class _BoardsPageState extends State<BoardsPage> {
         },
         onError: (error) {
           debugPrint('Error loading boards: $error');
-          // Solo mostrar error si el widget está montado y el contexto es válido
-          if (mounted && context.mounted) {
+          // Solo actualizar el estado si el widget está montado
+          if (mounted) {
             setState(() {
               _isInitialLoading = false; // Marcar como cargado incluso en error
             });
-            try {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Row(
-                    children: [
-                      const Icon(Icons.error, color: Colors.white),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          'Error cargando tableros: ${error.toString().split(':').last.trim()}',
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                    ],
-                  ),
-                  backgroundColor: Colors.red,
-                  duration: const Duration(seconds: 3),
-                ),
-              );
-            } catch (e) {
-              debugPrint('Error showing snackbar: $e');
-            }
           }
+          // No mostrar SnackBar aquí para evitar errores de contexto desactivado
+          // El error ya se registra en debugPrint para debugging
         },
       );
+    } else {
+      debugPrint('User is not authenticated, cannot load boards');
     }
   }
 
@@ -96,6 +210,7 @@ class _BoardsPageState extends State<BoardsPage> {
         final board = BoardModel.create(
           name: _boardNameController.text.trim(),
           ownerId: user.user.id,
+          teamId: _selectedTeamId, // Usar el equipo seleccionado por el usuario
         );
 
         await _dataSource.createBoard(board);
@@ -107,35 +222,17 @@ class _BoardsPageState extends State<BoardsPage> {
           // Ocultar el modal en el bloc también
           context.read<ModalBloc>().add(HideCreateBoardModal());
 
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Row(
-                children: [
-                  Icon(Icons.check_circle, color: Colors.white),
-                  SizedBox(width: 8),
-                  Text('Tablero creado exitosamente'),
-                ],
-              ),
-              backgroundColor: Colors.green,
-            ),
-          );
+          // Recargar la lista de tableros para mostrar el nuevo tablero
+          _loadBoards();
+
+          _showSafeSnackBar('Tablero creado exitosamente',
+              backgroundColor: Colors.green);
         }
       }
     } catch (e) {
       debugPrint('Error creating board: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Row(
-              children: [
-                const Icon(Icons.error, color: Colors.white),
-                const SizedBox(width: 8),
-                Text('Error creando tablero: $e'),
-              ],
-            ),
-            backgroundColor: Colors.red,
-          ),
-        );
+        _showSafeSnackBar('Error creando tablero: $e');
       }
     } finally {
       if (mounted) {
@@ -383,24 +480,12 @@ class _BoardsPageState extends State<BoardsPage> {
                 }
               }
             } catch (e) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text('Error: ${e.toString()}'),
-                  backgroundColor: Colors.red,
-                ),
-              );
+              _showSafeSnackBar('Error: ${e.toString()}');
             }
           },
         );
       },
     );
-  }
-
-  @override
-  void dispose() {
-    _boardNameController.dispose();
-    _boardDescriptionController.dispose();
-    super.dispose();
   }
 
   Widget _buildCreateBoardModal() {
@@ -571,6 +656,123 @@ class _BoardsPageState extends State<BoardsPage> {
                       ),
                     ),
                     maxLines: 3,
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Selector de Equipo
+                  Text(
+                    'Equipo (opcional)',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: isDark ? Colors.white : Colors.black87,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  DropdownButtonFormField<String>(
+                    value: _selectedTeamId,
+                    decoration: InputDecoration(
+                      labelText: 'Seleccionar equipo',
+                      labelStyle: TextStyle(
+                        color: isDark
+                            ? Colors.grey.shade300
+                            : Colors.grey.shade600,
+                      ),
+                      hintText: 'Sin equipo (tablero personal)',
+                      hintStyle: TextStyle(
+                        color: isDark
+                            ? Colors.grey.shade500
+                            : Colors.grey.shade400,
+                      ),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(
+                          color: isDark
+                              ? Colors.grey.shade600
+                              : Colors.grey.shade300,
+                        ),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(
+                          color: isDark
+                              ? Colors.grey.shade600
+                              : Colors.grey.shade300,
+                        ),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(
+                          color: Theme.of(context).colorScheme.primary,
+                        ),
+                      ),
+                      filled: true,
+                      fillColor:
+                          isDark ? Colors.grey.shade800 : Colors.grey.shade50,
+                      prefixIcon: Icon(
+                        Icons.group,
+                        color: isDark
+                            ? Colors.grey.shade400
+                            : Colors.grey.shade600,
+                      ),
+                    ),
+                    items: [
+                      // Opción "Sin equipo"
+                      DropdownMenuItem<String>(
+                        value: null,
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.person,
+                              size: 20,
+                              color: isDark
+                                  ? Colors.grey.shade400
+                                  : Colors.grey.shade600,
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              'Sin equipo (tablero personal)',
+                              style: TextStyle(
+                                color: isDark ? Colors.white : Colors.black87,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      // Equipos disponibles
+                      ..._teams.map((team) {
+                        return DropdownMenuItem<String>(
+                          value: team.id,
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                Icons.group,
+                                size: 20,
+                                color: Theme.of(context).colorScheme.primary,
+                              ),
+                              const SizedBox(width: 8),
+                              Flexible(
+                                child: Text(
+                                  team.name,
+                                  style: TextStyle(
+                                    color:
+                                        isDark ? Colors.white : Colors.black87,
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      }).toList(),
+                    ],
+                    onChanged: (value) {
+                      setState(() {
+                        _selectedTeamId = value;
+                      });
+                    },
                   ),
                   const SizedBox(height: 24),
                   Row(

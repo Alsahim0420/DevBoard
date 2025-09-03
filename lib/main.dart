@@ -71,7 +71,7 @@ class MyApp extends StatelessWidget {
                 brightness: Brightness.dark,
               ),
             ),
-            themeMode: themeState.isDarkMode ? ThemeMode.dark : ThemeMode.light,
+            themeMode: themeState.themeMode,
             home: const AuthListener(
               child: AuthGate(),
             ),

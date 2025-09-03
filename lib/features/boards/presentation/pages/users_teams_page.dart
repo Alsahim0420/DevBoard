@@ -1,8 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import '../../../../core/presentation/bloc/theme_bloc.dart';
 import '../../data/models/user_model.dart';
 import '../../data/models/team_model.dart';
 import '../../data/datasources/users_remote_datasource.dart';
@@ -28,6 +26,7 @@ class _UsersTeamsPageState extends State<UsersTeamsPage>
   List<UserModel> _users = [];
   List<TeamModel> _teams = [];
   bool _isLoading = true;
+  UserModel? _currentUser;
 
   // Stream subscriptions para poder cancelarlas
   StreamSubscription<List<UserModel>>? _usersSubscription;
@@ -91,7 +90,24 @@ class _UsersTeamsPageState extends State<UsersTeamsPage>
     _usersSubscription?.cancel(); // Cancelar suscripción anterior si existe
     _usersSubscription = _usersDataSource.getUsers().listen((users) {
       if (mounted) {
-        setState(() => _users = users);
+        setState(() {
+          _users = users;
+          // Buscar el usuario actual
+          final currentUserId = FirebaseAuth.instance.currentUser?.uid;
+          if (currentUserId != null) {
+            _currentUser = users.firstWhere(
+              (user) => user.id == currentUserId,
+              orElse: () => UserModel(
+                id: currentUserId,
+                displayName: 'Usuario Actual',
+                email: FirebaseAuth.instance.currentUser?.email ?? '',
+                role: UserRole.desarrollador,
+                createdAt: DateTime.now(),
+                updatedAt: DateTime.now(),
+              ),
+            );
+          }
+        });
       }
     });
   }
@@ -242,9 +258,12 @@ class _UsersTeamsPageState extends State<UsersTeamsPage>
     _teamsSubscription?.cancel();
   }
 
+  // Verificar si el usuario actual puede gestionar equipos
+  bool get canManageTeams => _currentUser?.canManageTeams ?? false;
+
   @override
   Widget build(BuildContext context) {
-    final isDark = context.read<ThemeBloc>().state.isDarkMode;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     if (_isLoading) {
       return Scaffold(
@@ -308,26 +327,42 @@ class _UsersTeamsPageState extends State<UsersTeamsPage>
               ),
               const SizedBox(width: 8),
               Expanded(
-                child: Text(
-                  'Usuarios (${_users.length})',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: isDark ? Colors.white : Colors.black87,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Usuarios (${_users.length})',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: isDark ? Colors.white : Colors.black87,
+                      ),
+                    ),
+                    if (_currentUser != null)
+                      Text(
+                        'Rol: ${_currentUser!.roleDisplayName}',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: isDark
+                              ? Colors.grey.shade400
+                              : Colors.grey.shade600,
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              if (canManageTeams)
+                ElevatedButton.icon(
+                  onPressed: _createUser,
+                  icon: const Icon(Icons.add, size: 18),
+                  label: const Text('Agregar'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.blue,
+                    foregroundColor: Colors.white,
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                   ),
                 ),
-              ),
-              ElevatedButton.icon(
-                onPressed: _createUser,
-                icon: const Icon(Icons.add, size: 18),
-                label: const Text('Agregar'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.blue,
-                  foregroundColor: Colors.white,
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                ),
-              ),
             ],
           ),
         ),
@@ -376,26 +411,42 @@ class _UsersTeamsPageState extends State<UsersTeamsPage>
               ),
               const SizedBox(width: 8),
               Expanded(
-                child: Text(
-                  'Teams (${_teams.length})',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: isDark ? Colors.white : Colors.black87,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Teams (${_teams.length})',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: isDark ? Colors.white : Colors.black87,
+                      ),
+                    ),
+                    if (_currentUser != null)
+                      Text(
+                        'Rol: ${_currentUser!.roleDisplayName}',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: isDark
+                              ? Colors.grey.shade400
+                              : Colors.grey.shade600,
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              if (canManageTeams)
+                ElevatedButton.icon(
+                  onPressed: _createTeam,
+                  icon: const Icon(Icons.add, size: 18),
+                  label: const Text('Agregar'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.orange,
+                    foregroundColor: Colors.white,
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                   ),
                 ),
-              ),
-              ElevatedButton.icon(
-                onPressed: _createTeam,
-                icon: const Icon(Icons.add, size: 18),
-                label: const Text('Agregar'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.orange,
-                  foregroundColor: Colors.white,
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                ),
-              ),
             ],
           ),
         ),
@@ -494,34 +545,35 @@ class _UsersTeamsPageState extends State<UsersTeamsPage>
                 ],
               ),
             ),
-            // Acciones
-            PopupMenuButton<String>(
-              onSelected: (value) {
-                // TODO: Implementar acciones (editar, eliminar, etc.)
-              },
-              itemBuilder: (context) => [
-                const PopupMenuItem(
-                  value: 'edit',
-                  child: Row(
-                    children: [
-                      Icon(Icons.edit, size: 18),
-                      SizedBox(width: 8),
-                      Text('Editar'),
-                    ],
+            // Acciones (solo si tiene permisos)
+            if (canManageTeams)
+              PopupMenuButton<String>(
+                onSelected: (value) {
+                  // TODO: Implementar acciones (editar, eliminar, etc.)
+                },
+                itemBuilder: (context) => [
+                  const PopupMenuItem(
+                    value: 'edit',
+                    child: Row(
+                      children: [
+                        Icon(Icons.edit, size: 18),
+                        SizedBox(width: 8),
+                        Text('Editar'),
+                      ],
+                    ),
                   ),
-                ),
-                const PopupMenuItem(
-                  value: 'delete',
-                  child: Row(
-                    children: [
-                      Icon(Icons.delete, size: 18, color: Colors.red),
-                      SizedBox(width: 8),
-                      Text('Eliminar', style: TextStyle(color: Colors.red)),
-                    ],
+                  const PopupMenuItem(
+                    value: 'delete',
+                    child: Row(
+                      children: [
+                        Icon(Icons.delete, size: 18, color: Colors.red),
+                        SizedBox(width: 8),
+                        Text('Eliminar', style: TextStyle(color: Colors.red)),
+                      ],
+                    ),
                   ),
-                ),
-              ],
-            ),
+                ],
+              ),
           ],
         ),
       ),
@@ -593,38 +645,40 @@ class _UsersTeamsPageState extends State<UsersTeamsPage>
                     ],
                   ),
                 ),
-                // Acciones
-                PopupMenuButton<String>(
-                  onSelected: (value) {
-                    if (value == 'edit') {
-                      _editTeam(team);
-                    } else if (value == 'delete') {
-                      _deleteTeam(team);
-                    }
-                  },
-                  itemBuilder: (context) => [
-                    const PopupMenuItem(
-                      value: 'edit',
-                      child: Row(
-                        children: [
-                          Icon(Icons.edit, size: 18),
-                          SizedBox(width: 8),
-                          Text('Editar'),
-                        ],
+                // Acciones (solo si tiene permisos)
+                if (canManageTeams)
+                  PopupMenuButton<String>(
+                    onSelected: (value) {
+                      if (value == 'edit') {
+                        _editTeam(team);
+                      } else if (value == 'delete') {
+                        _deleteTeam(team);
+                      }
+                    },
+                    itemBuilder: (context) => [
+                      const PopupMenuItem(
+                        value: 'edit',
+                        child: Row(
+                          children: [
+                            Icon(Icons.edit, size: 18),
+                            SizedBox(width: 8),
+                            Text('Editar'),
+                          ],
+                        ),
                       ),
-                    ),
-                    const PopupMenuItem(
-                      value: 'delete',
-                      child: Row(
-                        children: [
-                          Icon(Icons.delete, size: 18, color: Colors.red),
-                          SizedBox(width: 8),
-                          Text('Eliminar', style: TextStyle(color: Colors.red)),
-                        ],
+                      const PopupMenuItem(
+                        value: 'delete',
+                        child: Row(
+                          children: [
+                            Icon(Icons.delete, size: 18, color: Colors.red),
+                            SizedBox(width: 8),
+                            Text('Eliminar',
+                                style: TextStyle(color: Colors.red)),
+                          ],
+                        ),
                       ),
-                    ),
-                  ],
-                ),
+                    ],
+                  ),
               ],
             ),
             // Descripción si existe

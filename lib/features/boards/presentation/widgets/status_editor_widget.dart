@@ -178,7 +178,8 @@ class _StatusEditorWidgetState extends State<StatusEditorWidget> {
   Widget build(BuildContext context) {
     return BlocBuilder<ThemeBloc, ThemeState>(
       builder: (context, themeState) {
-        final isDark = themeState.isDarkMode;
+        // Usar el tema actual del contexto para detectar si es oscuro
+        final isDark = Theme.of(context).brightness == Brightness.dark;
 
         return Container(
           margin: const EdgeInsets.all(16),

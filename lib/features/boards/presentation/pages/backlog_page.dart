@@ -832,7 +832,8 @@ class _BacklogPageState extends State<BacklogPage> {
   Widget build(BuildContext context) {
     return BlocBuilder<ThemeBloc, ThemeState>(
       builder: (context, themeState) {
-        final isDark = themeState.isDarkMode;
+        // Usar el tema actual del contexto para detectar si es oscuro
+        final isDark = Theme.of(context).brightness == Brightness.dark;
 
         return Scaffold(
           backgroundColor:
@@ -920,7 +921,7 @@ class _BacklogPageState extends State<BacklogPage> {
   }
 
   Widget _buildBacklogContent() {
-    final isDark = context.read<ThemeBloc>().state.isDarkMode;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     // Si no hay tablero seleccionado, mostrar selector
     if (_selectedBoardId.isEmpty) {
@@ -1054,7 +1055,7 @@ class _BacklogPageState extends State<BacklogPage> {
   }
 
   Widget _buildTasksTable() {
-    final isDark = context.read<ThemeBloc>().state.isDarkMode;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return ReorderableListView.builder(
       itemCount: _tasks.length,
@@ -1123,163 +1124,186 @@ class _BacklogPageState extends State<BacklogPage> {
           ),
         ],
       ),
-      child: ListTile(
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        leading: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              Icons.drag_handle,
-              color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
-            ),
-            const SizedBox(width: 8),
-            Icon(
-              Icons.check_box_outline_blank,
-              color: Colors.blue,
-              size: 20,
-            ),
-          ],
-        ),
-        title: Text(
-          task.title,
-          style: TextStyle(
-            fontWeight: FontWeight.w600,
-            color: isDark ? Colors.white : Colors.black87,
-          ),
-        ),
-        subtitle: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const SizedBox(height: 4),
-            Row(
-              children: [
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: Colors.blue.withOpacity(0.2),
-                    borderRadius: BorderRadius.circular(4),
-                    border: Border.all(color: Colors.blue),
-                  ),
-                  child: Text(
-                    epic.title,
-                    style: const TextStyle(
-                      color: Colors.blue,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: statusColor.withOpacity(0.2),
-                    borderRadius: BorderRadius.circular(4),
-                    border: Border.all(color: statusColor),
-                  ),
-                  child: Text(
-                    statusText,
-                    style: TextStyle(
-                      color: statusColor,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 4),
-            Text(
-              'ID: $taskId • Tiempo: ${task.timeEstimate ?? '-'}',
-              style: TextStyle(
-                fontSize: 12,
-                color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
+      child: InkWell(
+        onTap: () => _showEditTaskModal(task),
+        borderRadius: BorderRadius.circular(12),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          child: Row(
+            children: [
+              // Checkbox
+              const Icon(
+                Icons.check_box_outline_blank,
+                color: Colors.blue,
+                size: 20,
               ),
-            ),
-          ],
-        ),
-        trailing: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            CircleAvatar(
-              radius: 12,
-              backgroundColor: Colors.grey.shade300,
-              child: Text(
-                'U',
-                style: TextStyle(
-                  fontSize: 12,
-                  color: Colors.grey.shade700,
-                ),
-              ),
-            ),
-            const SizedBox(width: 8),
-            PopupMenuButton<String>(
-              icon: const Icon(Icons.more_vert, size: 16),
-              onSelected: (value) async {
-                if (value == 'edit') {
-                  await _showEditTaskModal(task);
-                } else if (value == 'delete') {
-                  final confirmed = await showDialog<bool>(
-                    context: context,
-                    builder: (context) => AlertDialog(
-                      title: const Text('Confirmar eliminación'),
-                      content: Text(
-                          '¿Estás seguro de que quieres eliminar la tarea "${task.title}"?'),
-                      actions: [
-                        TextButton(
-                          onPressed: () => Navigator.of(context).pop(false),
-                          child: const Text('Cancelar'),
-                        ),
-                        TextButton(
-                          onPressed: () => Navigator.of(context).pop(true),
-                          style: TextButton.styleFrom(
-                            foregroundColor: Colors.red,
+              const SizedBox(width: 12),
+
+              // Contenido principal
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Título
+                    Text(
+                      task.title,
+                      style: TextStyle(
+                        fontWeight: FontWeight.w600,
+                        color: isDark ? Colors.white : Colors.black87,
+                        fontSize: 16,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+
+                    // Tags
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: Colors.blue.withOpacity(0.2),
+                            borderRadius: BorderRadius.circular(4),
+                            border: Border.all(color: Colors.blue),
                           ),
-                          child: const Text('Eliminar'),
+                          child: Text(
+                            epic.title,
+                            style: const TextStyle(
+                              color: Colors.blue,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: statusColor.withOpacity(0.2),
+                            borderRadius: BorderRadius.circular(4),
+                            border: Border.all(color: statusColor),
+                          ),
+                          child: Text(
+                            statusText,
+                            style: TextStyle(
+                              color: statusColor,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
                         ),
                       ],
                     ),
-                  );
+                    const SizedBox(height: 4),
 
-                  if (confirmed == true) {
-                    await _deleteTask(task.id);
-                  }
-                }
-              },
-              itemBuilder: (context) => [
-                const PopupMenuItem<String>(
-                  value: 'edit',
-                  child: Row(
-                    children: [
-                      Icon(Icons.edit, color: Colors.blue, size: 16),
-                      SizedBox(width: 8),
-                      Text('Editar tarea'),
+                    // Detalles
+                    Text(
+                      'ID: $taskId • Tiempo: ${task.timeEstimate ?? '-'}',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: isDark
+                            ? Colors.grey.shade400
+                            : Colors.grey.shade600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              // Elementos del lado derecho (incluyendo el icono de arrastrar)
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  CircleAvatar(
+                    radius: 12,
+                    backgroundColor:
+                        isDark ? Colors.grey.shade600 : Colors.grey.shade300,
+                    child: Text(
+                      'U',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: isDark
+                            ? Colors.grey.shade300
+                            : Colors.grey.shade700,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  PopupMenuButton<String>(
+                    icon: Icon(
+                      Icons.more_vert,
+                      size: 16,
+                      color:
+                          isDark ? Colors.grey.shade400 : Colors.grey.shade600,
+                    ),
+                    onSelected: (value) async {
+                      if (value == 'edit') {
+                        await _showEditTaskModal(task);
+                      } else if (value == 'delete') {
+                        final confirmed = await showDialog<bool>(
+                          context: context,
+                          builder: (context) => AlertDialog(
+                            title: const Text('Confirmar eliminación'),
+                            content: Text(
+                                '¿Estás seguro de que quieres eliminar la tarea "${task.title}"?'),
+                            actions: [
+                              TextButton(
+                                onPressed: () =>
+                                    Navigator.of(context).pop(false),
+                                child: const Text('Cancelar'),
+                              ),
+                              TextButton(
+                                onPressed: () =>
+                                    Navigator.of(context).pop(true),
+                                style: TextButton.styleFrom(
+                                  foregroundColor: Colors.red,
+                                ),
+                                child: const Text('Eliminar'),
+                              ),
+                            ],
+                          ),
+                        );
+
+                        if (confirmed == true) {
+                          await _deleteTask(task.id);
+                        }
+                      }
+                    },
+                    itemBuilder: (context) => [
+                      const PopupMenuItem<String>(
+                        value: 'edit',
+                        child: Row(
+                          children: [
+                            Icon(Icons.edit, color: Colors.blue, size: 16),
+                            SizedBox(width: 8),
+                            Text('Editar tarea'),
+                          ],
+                        ),
+                      ),
+                      const PopupMenuItem<String>(
+                        value: 'delete',
+                        child: Row(
+                          children: [
+                            Icon(Icons.delete, color: Colors.red, size: 16),
+                            SizedBox(width: 8),
+                            Text('Eliminar tarea'),
+                          ],
+                        ),
+                      ),
                     ],
                   ),
-                ),
-                const PopupMenuItem<String>(
-                  value: 'delete',
-                  child: Row(
-                    children: [
-                      Icon(Icons.delete, color: Colors.red, size: 16),
-                      SizedBox(width: 8),
-                      Text('Eliminar tarea'),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ],
+                ],
+              ),
+            ],
+          ),
         ),
-        onTap: () => _showEditTaskModal(task),
       ),
     );
   }
 
   Widget _buildBoardSelector() {
-    final isDark = context.read<ThemeBloc>().state.isDarkMode;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Center(
       child: Padding(
@@ -1369,7 +1393,7 @@ class _BacklogPageState extends State<BacklogPage> {
   }
 
   Widget _buildEmptyState() {
-    final isDark = context.read<ThemeBloc>().state.isDarkMode;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Center(
       child: Column(
@@ -1412,7 +1436,7 @@ class _BacklogPageState extends State<BacklogPage> {
   }
 
   Widget _buildCreateTaskModal() {
-    final isDark = context.read<ThemeBloc>().state.isDarkMode;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
       color: Colors.black.withOpacity(0.5),
       child: Center(
@@ -1820,7 +1844,7 @@ class _BacklogPageState extends State<BacklogPage> {
   }
 
   Widget _buildCreateEpicModal() {
-    final isDark = context.read<ThemeBloc>().state.isDarkMode;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Container(
       color: Colors.black.withOpacity(0.5),
@@ -2002,7 +2026,7 @@ class _BacklogPageState extends State<BacklogPage> {
   }
 
   Widget _buildEditSprintModal() {
-    final isDark = context.read<ThemeBloc>().state.isDarkMode;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Container(
       color: Colors.black.withOpacity(0.5),
@@ -2390,7 +2414,7 @@ class _BacklogEditSheetState extends State<BacklogEditSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = context.read<ThemeBloc>().state.isDarkMode;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Container(
       decoration: BoxDecoration(

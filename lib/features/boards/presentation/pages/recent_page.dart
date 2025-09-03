@@ -63,7 +63,8 @@ class _RecentPageState extends State<RecentPage> {
   Widget build(BuildContext context) {
     return BlocBuilder<ThemeBloc, ThemeState>(
       builder: (context, themeState) {
-        final isDark = themeState.isDarkMode;
+        // Usar el tema actual del contexto para detectar si es oscuro
+        final isDark = Theme.of(context).brightness == Brightness.dark;
 
         return Scaffold(
           backgroundColor: Colors.transparent,

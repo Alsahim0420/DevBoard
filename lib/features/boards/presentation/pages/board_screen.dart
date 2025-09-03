@@ -817,7 +817,8 @@ class _BoardScreenState extends State<BoardScreen> {
   Widget build(BuildContext context) {
     return BlocBuilder<ThemeBloc, ThemeState>(
       builder: (context, themeState) {
-        final isDark = themeState.isDarkMode;
+        // Usar el tema actual del contexto para detectar si es oscuro
+        final isDark = Theme.of(context).brightness == Brightness.dark;
 
         return Scaffold(
           backgroundColor: isDark
@@ -943,7 +944,7 @@ class _BoardScreenState extends State<BoardScreen> {
   }
 
   Widget _buildCreateEpicModal() {
-    final isDark = context.read<ThemeBloc>().state.isDarkMode;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
       color: Colors.black.withOpacity(0.5),
       child: Center(
@@ -1102,7 +1103,7 @@ class _BoardScreenState extends State<BoardScreen> {
   }
 
   Widget _buildEditTaskModal() {
-    final isDark = context.read<ThemeBloc>().state.isDarkMode;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
       color: Colors.black.withOpacity(0.6),
       child: Center(
@@ -1545,7 +1546,7 @@ class _BoardScreenState extends State<BoardScreen> {
 
   // Dropdown para seleccionar estado
   Widget _buildStatusDropdown() {
-    final isDark = context.read<ThemeBloc>().state.isDarkMode;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Container(
       width: double.infinity,
@@ -1711,7 +1712,7 @@ class _BoardScreenState extends State<BoardScreen> {
   // Método para arreglar tareas con estados inconsistentes
 
   Widget _buildCreateTaskModal() {
-    final isDark = context.read<ThemeBloc>().state.isDarkMode;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
       color: Colors.black.withOpacity(0.5),
       child: Center(
@@ -2181,7 +2182,7 @@ class _BoardScreenState extends State<BoardScreen> {
   }
 
   Widget _buildKanbanBoard() {
-    final isDark = context.read<ThemeBloc>().state.isDarkMode;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Stack(
       children: [
@@ -2321,7 +2322,7 @@ class _BoardScreenState extends State<BoardScreen> {
 
   Widget _buildKanbanColumn(
       BoardStatus boardStatus, List<TaskModel> tasks, int columnIndex) {
-    final isDark = context.read<ThemeBloc>().state.isDarkMode;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
       height: MediaQuery.of(context).size.height - 200, // Altura fija
       decoration: BoxDecoration(
@@ -2371,21 +2372,39 @@ class _BoardScreenState extends State<BoardScreen> {
                             _buildDraggableTaskCard(task, columnIndex)),
                         if (tasks.isEmpty)
                           Container(
+                            width: 280,
                             padding: const EdgeInsets.all(32),
-                            child: Text(
-                              isDragOver ? 'Soltar aquí' : 'Sin tareas',
-                              style: TextStyle(
-                                color: isDragOver
-                                    ? boardStatus.color
-                                    : isDark
-                                        ? Colors.grey.shade400
-                                        : Colors.grey.shade500,
-                                fontSize: 14,
-                                fontWeight: isDragOver
-                                    ? FontWeight.w600
-                                    : FontWeight.normal,
-                              ),
-                            ),
+                            child: isDragOver
+                                ? Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Icon(
+                                        Icons.add_circle_outline,
+                                        color: boardStatus.color,
+                                        size: 20,
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Text(
+                                        'Soltar aquí',
+                                        style: TextStyle(
+                                          color: boardStatus.color,
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ],
+                                  )
+                                : Text(
+                                    'Sin tareas',
+                                    textAlign: TextAlign.center,
+                                    style: TextStyle(
+                                      color: isDark
+                                          ? Colors.grey.shade400
+                                          : Colors.grey.shade500,
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.normal,
+                                    ),
+                                  ),
                           ),
                       ],
                     ),
@@ -2400,7 +2419,7 @@ class _BoardScreenState extends State<BoardScreen> {
   }
 
   Widget _buildKanbanColumnHeader(BoardStatus boardStatus, int taskCount) {
-    final isDark = context.read<ThemeBloc>().state.isDarkMode;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -2463,7 +2482,7 @@ class _BoardScreenState extends State<BoardScreen> {
   }
 
   Widget _buildDraggableTaskCard(TaskModel task, int columnIndex) {
-    final isDark = context.read<ThemeBloc>().state.isDarkMode;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Tooltip(
       message: 'Mantén presionado para arrastrar',
       child: LongPressDraggable<TaskModel>(
@@ -2473,7 +2492,7 @@ class _BoardScreenState extends State<BoardScreen> {
           elevation: 12,
           borderRadius: BorderRadius.circular(12),
           child: Container(
-            width: 200,
+            width: 280,
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
               color: isDark ? const Color(0xFF2D2D2D) : Colors.white,
@@ -2502,6 +2521,7 @@ class _BoardScreenState extends State<BoardScreen> {
         ),
         childWhenDragging: Container(
           margin: const EdgeInsets.all(8),
+          width: 280,
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
             color: isDark ? Colors.grey.shade800 : Colors.grey.shade100,
@@ -2510,12 +2530,24 @@ class _BoardScreenState extends State<BoardScreen> {
                 color: isDark ? Colors.grey.shade600 : Colors.grey.shade300,
                 style: BorderStyle.solid),
           ),
-          child: Text(
-            'Arrastrando...',
-            style: TextStyle(
-              color: isDark ? Colors.grey.shade300 : Colors.grey.shade500,
-              fontSize: 14,
-            ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                Icons.drag_indicator,
+                color: isDark ? Colors.grey.shade300 : Colors.grey.shade500,
+                size: 16,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                'Arrastrando...',
+                style: TextStyle(
+                  color: isDark ? Colors.grey.shade300 : Colors.grey.shade500,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
           ),
         ),
         child: _buildTaskCard(task, columnIndex),
@@ -2524,7 +2556,7 @@ class _BoardScreenState extends State<BoardScreen> {
   }
 
   Widget _buildTaskCard(TaskModel task, int columnIndex) {
-    final isDark = context.read<ThemeBloc>().state.isDarkMode;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -2872,7 +2904,7 @@ El equipo de DevBoard
 
   @override
   Widget build(BuildContext context) {
-    final isDark = context.read<ThemeBloc>().state.isDarkMode;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return AlertDialog(
       backgroundColor: isDark ? const Color(0xFF2D2D2D) : Colors.white,

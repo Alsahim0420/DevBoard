@@ -21,20 +21,59 @@ class BoardsRemoteDataSource {
     }
   }
 
-  // Obtener tableros de un usuario
+  // Obtener tableros de un usuario (incluyendo tableros de equipos)
   Stream<List<BoardModel>> getUserBoards(String userId) {
     debugPrint('Getting boards for user: $userId');
+
     return _firestore
-        .collection('boards')
-        .where('ownerId', isEqualTo: userId)
+        .collection('teams')
+        .where('memberUserIds', arrayContains: userId)
         .snapshots()
-        .map((snapshot) {
-      debugPrint('Found ${snapshot.docs.length} boards in Firestore');
-      final boards =
-          snapshot.docs.map((doc) => BoardModel.fromFirestore(doc)).toList();
-      // Ordenar localmente por fecha de creación
+        .asyncMap((teamsSnapshot) async {
+      // Obtener IDs de todos los equipos del usuario
+      final userTeamIds = teamsSnapshot.docs.map((doc) => doc.id).toList();
+      debugPrint('User is member of teams: $userTeamIds');
+
+      // Obtener tableros donde el usuario es owner
+      final ownedBoardsQuery =
+          _firestore.collection('boards').where('ownerId', isEqualTo: userId);
+
+      // Obtener tableros donde el usuario es miembro directo
+      final memberBoardsQuery = _firestore
+          .collection('boards')
+          .where('members', arrayContains: userId);
+
+      // Ejecutar consultas en paralelo
+      final futures = <Future<QuerySnapshot>>[
+        ownedBoardsQuery.get(),
+        memberBoardsQuery.get(),
+      ];
+
+      // Agregar consultas para cada equipo del usuario
+      for (final teamId in userTeamIds) {
+        final teamBoardsQuery =
+            _firestore.collection('boards').where('teamId', isEqualTo: teamId);
+        futures.add(teamBoardsQuery.get());
+      }
+
+      final results = await Future.wait(futures);
+
+      // Combinar resultados y eliminar duplicados
+      final allBoards = <String, BoardModel>{};
+
+      for (final snapshot in results) {
+        for (final doc in snapshot.docs) {
+          final board = BoardModel.fromFirestore(doc);
+          allBoards[board.id] = board;
+        }
+      }
+
+      final boards = allBoards.values.toList();
+      // Ordenar por fecha de creación
       boards.sort((a, b) => b.createdAt.compareTo(a.createdAt));
-      debugPrint('Returning ${boards.length} boards');
+
+      debugPrint(
+          'Returning ${boards.length} boards (owned + member + team boards)');
       return boards;
     });
   }
@@ -50,6 +89,51 @@ class BoardsRemoteDataSource {
     } catch (e) {
       throw Exception('Error al obtener el tablero: $e');
     }
+  }
+
+  // Verificar si un usuario tiene acceso a un tablero
+  Future<bool> hasAccessToBoard(String boardId, String userId) async {
+    try {
+      final board = await getBoard(boardId);
+      if (board == null) return false;
+
+      // El usuario tiene acceso si:
+      // 1. Es el propietario del tablero
+      // 2. Es miembro directo del tablero
+      // 3. Es miembro del equipo al que pertenece el tablero
+      if (board.isOwner(userId) || board.isMember(userId)) {
+        return true;
+      }
+
+      // Verificar si el usuario es miembro del equipo del tablero
+      if (board.teamId != null) {
+        final teamDoc =
+            await _firestore.collection('teams').doc(board.teamId).get();
+        if (teamDoc.exists) {
+          final teamData = teamDoc.data()!;
+          final memberUserIds =
+              List<String>.from(teamData['memberUserIds'] ?? []);
+          return memberUserIds.contains(userId);
+        }
+      }
+
+      return false;
+    } catch (e) {
+      debugPrint('Error checking board access: $e');
+      return false;
+    }
+  }
+
+  // Obtener tableros de un equipo específico
+  Stream<List<BoardModel>> getTeamBoards(String teamId) {
+    return _firestore
+        .collection('boards')
+        .where('teamId', isEqualTo: teamId)
+        .orderBy('createdAt', descending: true)
+        .snapshots()
+        .map((snapshot) {
+      return snapshot.docs.map((doc) => BoardModel.fromFirestore(doc)).toList();
+    });
   }
 
   // Actualizar un tablero
@@ -105,15 +189,19 @@ class BoardsRemoteDataSource {
     return docRef.id;
   }
 
-  // Obtener épicas de un tablero
+  // Obtener épicas de un tablero (todas las épicas del tablero, no solo las del usuario)
   Stream<List<EpicModel>> getBoardEpics(String boardId, String userId) {
     return _firestore
         .collection('epics')
         .where('boardId', isEqualTo: boardId)
-        .where('ownerId', isEqualTo: userId)
         .snapshots()
-        .map((snapshot) =>
-            snapshot.docs.map((doc) => EpicModel.fromFirestore(doc)).toList());
+        .map((snapshot) {
+      final epics =
+          snapshot.docs.map((doc) => EpicModel.fromFirestore(doc)).toList();
+      // Ordenar localmente por fecha de creación
+      epics.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      return epics;
+    });
   }
 
   // Obtener una épica específica
@@ -609,46 +697,31 @@ class BoardsRemoteDataSource {
     });
   }
 
-  // Obtener tareas de un sprint
+  // Obtener tareas de un sprint (todas las tareas del sprint, no solo las del usuario)
   Stream<List<TaskModel>> getSprintTasks(String sprintId, String userId) {
     return _firestore
         .collection('tasks')
         .where('sprintId', isEqualTo: sprintId)
-        .where('ownerId', isEqualTo: userId)
         .snapshots()
-        .map((snapshot) =>
-            snapshot.docs.map((doc) => TaskModel.fromFirestore(doc)).toList());
+        .map((snapshot) {
+      final tasks =
+          snapshot.docs.map((doc) => TaskModel.fromFirestore(doc)).toList();
+      // Ordenar localmente por fecha de creación
+      tasks.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      return tasks;
+    });
   }
 
-  // Obtener tareas de un tablero (incluyendo las del sprint activo)
+  // Obtener tareas de un tablero (todas las tareas del tablero, no solo las del usuario)
   Stream<List<TaskModel>> getBoardTasks(String boardId, String userId) async* {
     try {
       debugPrint(
           '🔍 getBoardTasks - Iniciando para boardId: $boardId, userId: $userId');
 
-      // Obtener todas las tareas del usuario para este tablero
-      final allTasksSnapshot = await _firestore
-          .collection('tasks')
-          .where('ownerId', isEqualTo: userId)
-          .get();
-
-      final allTasks = allTasksSnapshot.docs
-          .map((doc) => TaskModel.fromFirestore(doc))
-          .toList();
-      debugPrint(
-          '🔍 getBoardTasks - Total tareas del usuario: ${allTasks.length}');
-
-      // Mostrar todas las tareas para debugging
-      for (final task in allTasks) {
-        debugPrint(
-            '   - Tarea: ${task.title}, EpicId: ${task.epicId}, SprintId: ${task.sprintId}');
-      }
-
-      // Obtener todas las épicas del tablero
+      // Obtener todas las épicas del tablero (sin restricción de ownerId)
       final epicsSnapshot = await _firestore
           .collection('epics')
           .where('boardId', isEqualTo: boardId)
-          .where('ownerId', isEqualTo: userId)
           .get();
 
       final epicIds = epicsSnapshot.docs.map((doc) => doc.id).toList();
@@ -665,30 +738,55 @@ class BoardsRemoteDataSource {
       debugPrint('🔍 getBoardTasks - Sprints encontrados: ${sprintIds.length}');
       debugPrint('🔍 getBoardTasks - IDs de sprints: $sprintIds');
 
-      // Filtrar tareas que pertenecen a este tablero
-      final boardTasks = allTasks.where((task) {
-        debugPrint('🔍 Analizando tarea: ${task.title}');
-        debugPrint('   - epicId: ${task.epicId}');
-        debugPrint('   - sprintId: ${task.sprintId}');
+      // Obtener todas las tareas que pertenecen a épicas o sprints del tablero
+      final List<TaskModel> allBoardTasks = [];
 
-        // Tarea pertenece a una épica del tablero
-        if (epicIds.contains(task.epicId)) {
-          debugPrint('   ✅ Tarea pertenece a épica del tablero');
-          return true;
-        }
+      // Obtener tareas de épicas del tablero
+      if (epicIds.isNotEmpty) {
+        final epicTasksSnapshot = await _firestore
+            .collection('tasks')
+            .where('epicId', whereIn: epicIds)
+            .get();
 
-        // Tarea pertenece a un sprint del tablero
-        if (task.sprintId != null && sprintIds.contains(task.sprintId)) {
-          debugPrint('   ✅ Tarea pertenece a sprint del tablero');
-          return true;
-        }
+        final epicTasks = epicTasksSnapshot.docs
+            .map((doc) => TaskModel.fromFirestore(doc))
+            .toList();
+        allBoardTasks.addAll(epicTasks);
+        debugPrint('🔍 getBoardTasks - Tareas de épicas: ${epicTasks.length}');
+      }
 
-        debugPrint('   ❌ Tarea NO pertenece al tablero');
-        return false;
-      }).toList();
+      // Obtener tareas de sprints del tablero
+      if (sprintIds.isNotEmpty) {
+        final sprintTasksSnapshot = await _firestore
+            .collection('tasks')
+            .where('sprintId', whereIn: sprintIds)
+            .get();
 
-      debugPrint('🔍 getBoardTasks - Tareas filtradas: ${boardTasks.length}');
-      yield boardTasks;
+        final sprintTasks = sprintTasksSnapshot.docs
+            .map((doc) => TaskModel.fromFirestore(doc))
+            .toList();
+        allBoardTasks.addAll(sprintTasks);
+        debugPrint(
+            '🔍 getBoardTasks - Tareas de sprints: ${sprintTasks.length}');
+      }
+
+      // Eliminar duplicados (tareas que pueden estar tanto en épicas como en sprints)
+      final uniqueTasks = <String, TaskModel>{};
+      for (final task in allBoardTasks) {
+        uniqueTasks[task.id] = task;
+      }
+
+      final finalTasks = uniqueTasks.values.toList();
+      debugPrint(
+          '🔍 getBoardTasks - Tareas finales (sin duplicados): ${finalTasks.length}');
+
+      // Mostrar todas las tareas para debugging
+      for (final task in finalTasks) {
+        debugPrint(
+            '   - Tarea: ${task.title}, EpicId: ${task.epicId}, SprintId: ${task.sprintId}, Owner: ${task.ownerId}');
+      }
+
+      yield finalTasks;
     } catch (e) {
       debugPrint('❌ Error in getBoardTasks: $e');
       yield [];
