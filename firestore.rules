@@ -25,8 +25,18 @@ service cloud.firestore {
       allow read, write: if request.auth != null;
     }
 
-    // Usuario actual (perfil)
+    // Usuarios (colección global de usuarios)
     match /users/{userId} {
+      allow read, write: if request.auth != null;
+    }
+
+    // Teams (equipos)
+    match /teams/{teamId} {
+      allow read, write: if request.auth != null;
+    }
+
+    // Usuario actual (perfil) - mantener compatibilidad
+    match /user_profiles/{userId} {
       allow read, write: if request.auth != null && request.auth.uid == userId;
     }
   }

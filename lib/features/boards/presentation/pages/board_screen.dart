@@ -2,10 +2,14 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'dart:async';
 import '../../data/models/epic_model.dart';
 import '../../data/models/task_model.dart';
+import '../../data/models/user_model.dart';
 import '../../data/datasources/boards_remote_datasource.dart';
+import '../../data/datasources/users_remote_datasource.dart';
 import '../widgets/status_editor_widget.dart';
 import '../../../../core/presentation/bloc/theme_bloc.dart';
 import '../../../auth/presentation/bloc/auth_bloc.dart';
@@ -27,6 +31,7 @@ class BoardScreen extends StatefulWidget {
 
 class _BoardScreenState extends State<BoardScreen> {
   final BoardsRemoteDataSource _dataSource = BoardsRemoteDataSource();
+  final UsersRemoteDataSource _usersDataSource = UsersRemoteDataSource();
   final TextEditingController _taskTitleController = TextEditingController();
   final TextEditingController _epicTitleController = TextEditingController();
   final TextEditingController _taskDescriptionController =
@@ -51,6 +56,7 @@ class _BoardScreenState extends State<BoardScreen> {
   // Stream subscriptions para gestionar el ciclo de vida
   StreamSubscription<List<EpicModel>>? _epicsSubscription;
   final List<StreamSubscription<List<TaskModel>>> _taskSubscriptions = [];
+  StreamSubscription<User?>? _authStateSubscription;
 
   // Estados personalizados del tablero
   List<BoardStatus> _boardStatuses = [
@@ -59,9 +65,28 @@ class _BoardScreenState extends State<BoardScreen> {
     BoardStatus('Done', 'done', Colors.green),
   ];
 
+  void _setupAuthListener() {
+    _authStateSubscription =
+        FirebaseAuth.instance.authStateChanges().listen((User? user) {
+      if (user == null) {
+        // Usuario cerró sesión, cancelar todas las suscripciones
+        _cancelAllSubscriptions();
+      }
+    });
+  }
+
+  void _cancelAllSubscriptions() {
+    _epicsSubscription?.cancel();
+    for (final subscription in _taskSubscriptions) {
+      subscription.cancel();
+    }
+    _taskSubscriptions.clear();
+  }
+
   @override
   void initState() {
     super.initState();
+    _setupAuthListener();
     _loadEpics();
     _loadBoardStatuses();
     _horizontalScrollController.addListener(_onScrollChanged);
@@ -619,6 +644,17 @@ class _BoardScreenState extends State<BoardScreen> {
     });
   }
 
+  void _showInviteUsersModal() {
+    showDialog(
+      context: context,
+      builder: (context) => _InviteUsersDialog(
+        boardId: widget.boardId,
+        dataSource: _dataSource,
+        usersDataSource: _usersDataSource,
+      ),
+    );
+  }
+
   void _hideCreateEpicModal() {
     setState(() {
       _showCreateEpic = false;
@@ -833,6 +869,16 @@ class _BoardScreenState extends State<BoardScreen> {
                   _showCreateTaskModal();
                 },
                 tooltip: 'Crear Tarea',
+              ),
+              IconButton(
+                icon: Icon(
+                  Icons.person_add,
+                  color: isDark ? Colors.white : Colors.black87,
+                ),
+                onPressed: () {
+                  _showInviteUsersModal();
+                },
+                tooltip: 'Invitar Usuarios',
               ),
               // TEMPORAL: Botón para arreglar tareas
               IconButton(
@@ -2635,6 +2681,7 @@ class _BoardScreenState extends State<BoardScreen> {
   @override
   void dispose() {
     // Cancelar todas las suscripciones de streams
+    _authStateSubscription?.cancel();
     _epicsSubscription?.cancel();
     for (final subscription in _taskSubscriptions) {
       subscription.cancel();
@@ -2648,5 +2695,349 @@ class _BoardScreenState extends State<BoardScreen> {
     _taskTimeEstimateController.dispose();
     _horizontalScrollController.dispose();
     super.dispose();
+  }
+}
+
+class _InviteUsersDialog extends StatefulWidget {
+  final String boardId;
+  final BoardsRemoteDataSource dataSource;
+  final UsersRemoteDataSource usersDataSource;
+
+  const _InviteUsersDialog({
+    required this.boardId,
+    required this.dataSource,
+    required this.usersDataSource,
+  });
+
+  @override
+  State<_InviteUsersDialog> createState() => _InviteUsersDialogState();
+}
+
+class _InviteUsersDialogState extends State<_InviteUsersDialog> {
+  List<UserModel> _users = [];
+  List<UserModel> _selectedUsers = [];
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUsers();
+  }
+
+  Future<void> _loadUsers() async {
+    try {
+      widget.usersDataSource.getUsers().listen((users) {
+        if (mounted) {
+          setState(() {
+            _users = users;
+            _isLoading = false;
+          });
+        }
+      });
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isLoading = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error cargando usuarios: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _inviteUsers() async {
+    if (_selectedUsers.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Selecciona al menos un usuario'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
+    try {
+      // Obtener el board actual
+      final board = await widget.dataSource.getBoard(widget.boardId);
+      if (board == null) {
+        throw Exception('Board no encontrado');
+      }
+
+      // Agregar usuarios seleccionados al board
+      for (final user in _selectedUsers) {
+        final updatedBoard = board.addMember(user.id);
+        await widget.dataSource.updateBoard(updatedBoard);
+      }
+
+      if (mounted) {
+        Navigator.of(context).pop();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+                '${_selectedUsers.length} usuarios invitados exitosamente'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error invitando usuarios: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _sendEmailInvitations() async {
+    if (_selectedUsers.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Selecciona al menos un usuario'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
+    try {
+      // Obtener el board actual
+      final board = await widget.dataSource.getBoard(widget.boardId);
+      if (board == null) {
+        throw Exception('Board no encontrado');
+      }
+
+      // Crear el contenido del correo
+      final subject = 'Invitación al tablero: ${board.name}';
+      final body = _createEmailBody(board.name, _selectedUsers);
+
+      // Crear la URL del correo
+      final emailUrl = Uri(
+        scheme: 'mailto',
+        path: _selectedUsers.map((user) => user.email).join(','),
+        query:
+            'subject=${Uri.encodeComponent(subject)}&body=${Uri.encodeComponent(body)}',
+      );
+
+      // Abrir el cliente de correo
+      if (await canLaunchUrl(emailUrl)) {
+        await launchUrl(emailUrl);
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                  'Cliente de correo abierto para ${_selectedUsers.length} usuarios'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
+      } else {
+        throw Exception('No se puede abrir el cliente de correo');
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error abriendo correo: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  String _createEmailBody(String boardName, List<UserModel> users) {
+    final userNames = users.map((user) => user.displayName).join(', ');
+
+    return '''
+Hola,
+
+Te invito a unirte al tablero "$boardName" en DevBoard.
+
+Usuarios invitados: $userNames
+
+Para acceder al tablero, simplemente inicia sesión en la aplicación y podrás ver el tablero en tu lista de tableros disponibles.
+
+¡Esperamos trabajar contigo!
+
+Saludos,
+El equipo de DevBoard
+''';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = context.read<ThemeBloc>().state.isDarkMode;
+
+    return AlertDialog(
+      backgroundColor: isDark ? const Color(0xFF2D2D2D) : Colors.white,
+      title: Text(
+        'Invitar Usuarios',
+        style: TextStyle(
+          color: isDark ? Colors.white : Colors.black87,
+        ),
+      ),
+      content: SizedBox(
+        width: 400,
+        height: 400,
+        child: _isLoading
+            ? const Center(child: CircularProgressIndicator())
+            : _users.isEmpty
+                ? Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.people_outline,
+                          size: 64,
+                          color: isDark
+                              ? Colors.grey.shade600
+                              : Colors.grey.shade400,
+                        ),
+                        const SizedBox(height: 16),
+                        Text(
+                          'No hay usuarios disponibles',
+                          style: TextStyle(
+                            fontSize: 16,
+                            color: isDark
+                                ? Colors.grey.shade400
+                                : Colors.grey.shade600,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'Crea usuarios primero en la página de Usuarios y Teams',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: isDark
+                                ? Colors.grey.shade500
+                                : Colors.grey.shade500,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ],
+                    ),
+                  )
+                : Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Selecciona usuarios para invitar:',
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: isDark
+                              ? Colors.grey.shade300
+                              : Colors.grey.shade700,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      Expanded(
+                        child: ListView.builder(
+                          itemCount: _users.length,
+                          itemBuilder: (context, index) {
+                            final user = _users[index];
+                            final isSelected = _selectedUsers.contains(user);
+
+                            return CheckboxListTile(
+                              value: isSelected,
+                              onChanged: (value) {
+                                setState(() {
+                                  if (value == true) {
+                                    _selectedUsers.add(user);
+                                  } else {
+                                    _selectedUsers.remove(user);
+                                  }
+                                });
+                              },
+                              title: Row(
+                                children: [
+                                  CircleAvatar(
+                                    radius: 16,
+                                    backgroundColor: Colors.blue,
+                                    child: Text(
+                                      user.initials,
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          user.displayName,
+                                          style: TextStyle(
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.w500,
+                                            color: isDark
+                                                ? Colors.white
+                                                : Colors.black87,
+                                          ),
+                                        ),
+                                        Text(
+                                          user.email,
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            color: isDark
+                                                ? Colors.grey.shade400
+                                                : Colors.grey.shade600,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              activeColor: Colors.blue,
+                              contentPadding: EdgeInsets.zero,
+                            );
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: Text(
+            'Cancelar',
+            style: TextStyle(
+              color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
+            ),
+          ),
+        ),
+        if (_selectedUsers.isNotEmpty) ...[
+          ElevatedButton.icon(
+            onPressed: _sendEmailInvitations,
+            icon: const Icon(Icons.email, size: 16),
+            label: const Text('Enviar por correo'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.green,
+              foregroundColor: Colors.white,
+            ),
+          ),
+          const SizedBox(width: 8),
+        ],
+        ElevatedButton(
+          onPressed: _selectedUsers.isEmpty ? null : _inviteUsers,
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.blue,
+            foregroundColor: Colors.white,
+          ),
+          child: Text('Invitar (${_selectedUsers.length})'),
+        ),
+      ],
+    );
   }
 }

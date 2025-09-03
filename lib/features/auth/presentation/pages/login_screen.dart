@@ -6,6 +6,7 @@ import '../bloc/auth_bloc.dart';
 import '../bloc/auth_event.dart';
 import '../bloc/auth_state.dart';
 import '../../domain/entities/auth_credentials.dart';
+import '../widgets/password_reset_dialog.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -115,6 +116,13 @@ class _LoginScreenState extends State<LoginScreen>
 
   void _goToRegister() {
     Navigator.pushReplacementNamed(context, '/register');
+  }
+
+  void _showPasswordResetDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => const PasswordResetDialog(),
+    );
   }
 
   @override
@@ -412,7 +420,24 @@ class _LoginScreenState extends State<LoginScreen>
                     );
                   },
                 ),
-                const SizedBox(height: 28),
+                const SizedBox(height: 20),
+                // Botón de olvidé contraseña
+                TextButton(
+                  onPressed: _showPasswordResetDialog,
+                  style: TextButton.styleFrom(
+                    foregroundColor: Theme.of(context).colorScheme.primary,
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  ),
+                  child: const Text(
+                    '¿Olvidaste tu contraseña?',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
                 // Link a registro
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,

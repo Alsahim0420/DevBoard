@@ -5,6 +5,7 @@ import '../bloc/auth_event.dart';
 import '../bloc/auth_state.dart';
 import '../../domain/entities/auth_credentials.dart';
 import '../widgets/glassmorphism_container.dart';
+import '../widgets/password_reset_dialog.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -34,6 +35,13 @@ class _LoginPageState extends State<LoginPage> {
       );
       context.read<AuthBloc>().add(SignInRequested(credentials));
     }
+  }
+
+  void _showPasswordResetDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => const PasswordResetDialog(),
+    );
   }
 
   @override
@@ -174,10 +182,39 @@ class _LoginPageState extends State<LoginPage> {
                         ),
                         const SizedBox(height: 16),
                         TextButton(
+                          onPressed: _showPasswordResetDialog,
+                          style: TextButton.styleFrom(
+                            foregroundColor:
+                                Theme.of(context).colorScheme.primary,
+                            padding: const EdgeInsets.symmetric(
+                                vertical: 8, horizontal: 16),
+                          ),
+                          child: const Text(
+                            '¿Olvidaste tu contraseña?',
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        TextButton(
                           onPressed: () {
                             Navigator.pushNamed(context, '/register');
                           },
-                          child: const Text('¿No tienes cuenta? Regístrate'),
+                          style: TextButton.styleFrom(
+                            foregroundColor:
+                                Theme.of(context).colorScheme.secondary,
+                            padding: const EdgeInsets.symmetric(
+                                vertical: 8, horizontal: 16),
+                          ),
+                          child: const Text(
+                            '¿No tienes cuenta? Regístrate',
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
                         ),
                       ],
                     ),

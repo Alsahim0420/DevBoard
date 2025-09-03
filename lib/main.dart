@@ -5,7 +5,7 @@ import 'firebase_options.dart';
 import 'core/di/injection_container.dart' as di;
 import 'features/auth/presentation/bloc/auth_bloc.dart';
 import 'features/auth/presentation/pages/login_screen.dart';
-import 'features/auth/presentation/pages/register_screen.dart';
+import 'features/auth/presentation/pages/register_page.dart';
 import 'features/auth/presentation/pages/home_page.dart';
 import 'features/boards/presentation/pages/boards_test_page.dart';
 import 'features/boards/presentation/pages/firebase_test_page.dart';
@@ -16,6 +16,7 @@ import 'features/boards/presentation/pages/favorites_page.dart';
 import 'features/boards/presentation/pages/projects_page.dart';
 import 'features/boards/presentation/pages/panels_page.dart';
 import 'features/boards/presentation/pages/goals_page.dart';
+import 'features/boards/presentation/pages/users_teams_page.dart';
 import 'core/presentation/widgets/auth_gate.dart';
 import 'core/presentation/widgets/auth_listener.dart';
 import 'core/presentation/layouts/main_layout.dart';
@@ -77,7 +78,7 @@ class MyApp extends StatelessWidget {
             routes: {
               '/login': (context) => const AuthListener(child: LoginScreen()),
               '/register': (context) =>
-                  const AuthListener(child: RegisterScreen()),
+                  const AuthListener(child: RegisterPage()),
               // Rutas internas ahora se manejan en el Shell
             },
             onGenerateRoute: (settings) {
@@ -159,6 +160,9 @@ class _ShellState extends State<Shell> {
                 break;
               case '/goals':
                 page = const GoalsPage();
+                break;
+              case '/users-teams':
+                page = const UsersTeamsPage();
                 break;
               case '/boards-test':
                 page = const BoardsTestPage();

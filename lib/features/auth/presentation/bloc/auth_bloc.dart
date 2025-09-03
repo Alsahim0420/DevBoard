@@ -5,6 +5,7 @@ import '../../domain/usecases/sign_in_usecase.dart';
 import '../../domain/usecases/sign_up_usecase.dart';
 import '../../domain/usecases/sign_out_usecase.dart';
 import '../../domain/usecases/get_current_user_usecase.dart';
+import '../../domain/usecases/send_password_reset_email_usecase.dart';
 import '../../domain/repositories/auth_repository.dart';
 import 'auth_event.dart';
 import 'auth_state.dart';
@@ -14,6 +15,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
   final SignUpUseCase signUpUseCase;
   final SignOutUseCase signOutUseCase;
   final GetCurrentUserUseCase getCurrentUserUseCase;
+  final SendPasswordResetEmailUseCase sendPasswordResetEmailUseCase;
   final AuthRepository authRepository;
 
   StreamSubscription<UserEntity?>? _authStateSubscription;
@@ -23,12 +25,14 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     required this.signUpUseCase,
     required this.signOutUseCase,
     required this.getCurrentUserUseCase,
+    required this.sendPasswordResetEmailUseCase,
     required this.authRepository,
   }) : super(AuthInitial()) {
     on<SignInRequested>(_onSignInRequested);
     on<SignUpRequested>(_onSignUpRequested);
     on<SignOutRequested>(_onSignOutRequested);
     on<AuthCheckRequested>(_onAuthCheckRequested);
+    on<PasswordResetRequested>(_onPasswordResetRequested);
 
     // Escuchar cambios en el estado de autenticación
     _authStateSubscription = authRepository.authStateChanges.listen(
@@ -88,6 +92,22 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       emit(Authenticated(user));
     } else {
       emit(Unauthenticated());
+    }
+  }
+
+  Future<void> _onPasswordResetRequested(
+    PasswordResetRequested event,
+    Emitter<AuthState> emit,
+  ) async {
+    emit(AuthLoading());
+    try {
+      print('AuthBloc: Iniciando envío de email de reset para: ${event.email}');
+      await sendPasswordResetEmailUseCase(event.email);
+      print('AuthBloc: Email de reset enviado exitosamente');
+      emit(PasswordResetSent(event.email));
+    } catch (e) {
+      print('AuthBloc: Error al enviar email de reset: $e');
+      emit(AuthError(e.toString()));
     }
   }
 

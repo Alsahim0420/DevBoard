@@ -6,6 +6,7 @@ import '../../features/auth/domain/usecases/sign_in_usecase.dart';
 import '../../features/auth/domain/usecases/sign_up_usecase.dart';
 import '../../features/auth/domain/usecases/sign_out_usecase.dart';
 import '../../features/auth/domain/usecases/get_current_user_usecase.dart';
+import '../../features/auth/domain/usecases/send_password_reset_email_usecase.dart';
 import '../../features/auth/presentation/bloc/auth_bloc.dart';
 
 final sl = GetIt.instance;
@@ -18,6 +19,7 @@ Future<void> init() async {
       signUpUseCase: sl(),
       signOutUseCase: sl(),
       getCurrentUserUseCase: sl(),
+      sendPasswordResetEmailUseCase: sl(),
       authRepository: sl(),
     ),
   );
@@ -27,6 +29,7 @@ Future<void> init() async {
   sl.registerLazySingleton(() => SignUpUseCase(sl()));
   sl.registerLazySingleton(() => SignOutUseCase(sl()));
   sl.registerLazySingleton(() => GetCurrentUserUseCase(sl()));
+  sl.registerLazySingleton(() => SendPasswordResetEmailUseCase(sl()));
 
   // Repository
   sl.registerLazySingleton<AuthRepository>(

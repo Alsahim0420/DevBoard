@@ -17,6 +17,10 @@ class TaskModel {
   final DateTime? dueDate;
   final TaskPriority priority;
   final String? timeEstimate;
+  final double estimateHours; // horas estimadas
+  final double? spentHours; // horas gastadas (opcional)
+  final String? teamId; // ID del team asignado
+  final List<String> tags; // etiquetas de la tarea
   final List<String>
       favoritedBy; // Lista de usuarios que marcaron como favorito
   final DateTime createdAt;
@@ -35,6 +39,10 @@ class TaskModel {
     this.dueDate,
     required this.priority,
     this.timeEstimate,
+    this.estimateHours = 0.0,
+    this.spentHours,
+    this.teamId,
+    this.tags = const [],
     this.favoritedBy = const [],
     required this.createdAt,
     required this.updatedAt,
@@ -62,6 +70,10 @@ class TaskModel {
           : null,
       priority: _parsePriority(data['priority'] ?? 'medium'),
       timeEstimate: data['timeEstimate'],
+      estimateHours: (data['estimateHours'] ?? 0.0).toDouble(),
+      spentHours: data['spentHours']?.toDouble(),
+      teamId: data['teamId'],
+      tags: List<String>.from(data['tags'] ?? []),
       favoritedBy: List<String>.from(data['favoritedBy'] ?? []),
       createdAt: data['createdAt'] != null
           ? (data['createdAt'] as Timestamp).toDate()
@@ -88,6 +100,10 @@ class TaskModel {
       'dueDate': dueDate != null ? Timestamp.fromDate(dueDate!) : null,
       'priority': _priorityToString(priority),
       'timeEstimate': timeEstimate,
+      'estimateHours': estimateHours,
+      'spentHours': spentHours,
+      'teamId': teamId,
+      'tags': tags,
       'favoritedBy': favoritedBy,
       'createdAt': Timestamp.fromDate(
           createdAt.isAfter(DateTime(2020)) ? createdAt : now),
@@ -136,6 +152,10 @@ class TaskModel {
     DateTime? dueDate,
     TaskPriority? priority,
     String? timeEstimate,
+    double? estimateHours,
+    double? spentHours,
+    String? teamId,
+    List<String>? tags,
     List<String>? favoritedBy,
     DateTime? createdAt,
     DateTime? updatedAt,
@@ -153,6 +173,10 @@ class TaskModel {
       dueDate: dueDate ?? this.dueDate,
       priority: priority ?? this.priority,
       timeEstimate: timeEstimate ?? this.timeEstimate,
+      estimateHours: estimateHours ?? this.estimateHours,
+      spentHours: spentHours ?? this.spentHours,
+      teamId: teamId ?? this.teamId,
+      tags: tags ?? this.tags,
       favoritedBy: favoritedBy ?? this.favoritedBy,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,

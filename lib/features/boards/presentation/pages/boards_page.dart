@@ -740,7 +740,7 @@ class _BoardCardState extends State<_BoardCard>
                       ),
                       const SizedBox(width: 4),
                       Text(
-                        '${widget.board.members.length + 1}',
+                        '${widget.board.members.length}',
                         style: TextStyle(
                           fontSize: 12,
                           color: isDark

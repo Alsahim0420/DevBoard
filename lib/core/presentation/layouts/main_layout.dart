@@ -227,12 +227,12 @@ class _Sidebar extends StatelessWidget {
                             isSelected: currentRoute == '/panels',
                             onTap: () => onSidebarTap?.call('/panels'),
                           ),
-                          // _SidebarItem(
-                          //   icon: Icons.people,
-                          //   label: 'Equipos',
-                          //   isSelected: false,
-                          //   onTap: () {},
-                          // ),
+                          _SidebarItem(
+                            icon: Icons.people,
+                            label: 'Equipos',
+                            isSelected: currentRoute == '/users-teams',
+                            onTap: () => onSidebarTap?.call('/users-teams'),
+                          ),
                           _SidebarItem(
                             icon: Icons.track_changes,
                             label: 'Metas',

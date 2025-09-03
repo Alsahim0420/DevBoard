@@ -8,4 +8,5 @@ abstract class AuthRepository {
   Future<UserEntity> signIn(AuthCredentials credentials);
   Future<UserEntity> signUp(AuthCredentials credentials);
   Future<void> signOut();
+  Future<void> sendPasswordResetEmail(String email);
 }

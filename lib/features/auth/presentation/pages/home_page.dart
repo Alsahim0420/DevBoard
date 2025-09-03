@@ -244,6 +244,36 @@ class _QuickActionsSection extends StatelessWidget {
             ),
           ],
         ),
+        const SizedBox(height: 16),
+        Row(
+          children: [
+            Expanded(
+              child: _QuickActionCard(
+                icon: Icons.people,
+                title: 'Equipos',
+                subtitle: 'Gestionar usuarios y teams',
+                color: Colors.orange,
+                onTap: () {
+                  // Navegar a Usuarios y Teams
+                  Navigator.pushNamed(context, '/users-teams');
+                },
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: _QuickActionCard(
+                icon: Icons.track_changes,
+                title: 'Metas',
+                subtitle: 'Ver progreso y estadísticas',
+                color: Colors.purple,
+                onTap: () {
+                  // Navegar a Metas
+                  Navigator.pushNamed(context, '/goals');
+                },
+              ),
+            ),
+          ],
+        ),
       ],
     );
   }

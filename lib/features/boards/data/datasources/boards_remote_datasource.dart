@@ -765,4 +765,110 @@ class BoardsRemoteDataSource {
       debugPrint('❌ Error arreglando tareas: $e');
     }
   }
+
+  // ========== MÉTODOS ADICIONALES PARA NUEVAS FUNCIONALIDADES ==========
+
+  // Agregar tareas al sprint
+  Future<void> addTasksToSprint(String sprintId, List<String> taskIds) async {
+    try {
+      final batch = _firestore.batch();
+
+      for (final taskId in taskIds) {
+        final taskRef = _firestore.collection('tasks').doc(taskId);
+        batch.update(taskRef, {
+          'sprintId': sprintId,
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
+      }
+
+      await batch.commit();
+    } catch (e) {
+      throw Exception('Error al agregar tareas al sprint: $e');
+    }
+  }
+
+  // Remover tarea del sprint
+  Future<void> removeTaskFromSprint(String taskId) async {
+    try {
+      await _firestore.collection('tasks').doc(taskId).update({
+        'sprintId': FieldValue.delete(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+    } catch (e) {
+      throw Exception('Error al remover tarea del sprint: $e');
+    }
+  }
+
+  // Obtener tareas del backlog (sin sprint)
+  Stream<List<TaskModel>> getBacklogTasks(String boardId) {
+    return _firestore
+        .collection('tasks')
+        .where('boardId', isEqualTo: boardId)
+        .where('sprintId', isNull: true)
+        .orderBy('order', descending: false)
+        .snapshots()
+        .map((snapshot) {
+      return snapshot.docs.map((doc) => TaskModel.fromFirestore(doc)).toList();
+    });
+  }
+
+  // Actualizar horas estimadas de tarea
+  Future<void> updateTaskEstimateHours(String taskId, double hours) async {
+    try {
+      await _firestore.collection('tasks').doc(taskId).update({
+        'estimateHours': hours,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+    } catch (e) {
+      throw Exception('Error al actualizar horas estimadas: $e');
+    }
+  }
+
+  // Actualizar horas gastadas de tarea
+  Future<void> updateTaskSpentHours(String taskId, double hours) async {
+    try {
+      await _firestore.collection('tasks').doc(taskId).update({
+        'spentHours': hours,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+    } catch (e) {
+      throw Exception('Error al actualizar horas gastadas: $e');
+    }
+  }
+
+  // Asignar usuario a tarea
+  Future<void> assignUserToTask(String taskId, String userId) async {
+    try {
+      await _firestore.collection('tasks').doc(taskId).update({
+        'assignedTo': userId,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+    } catch (e) {
+      throw Exception('Error al asignar usuario a tarea: $e');
+    }
+  }
+
+  // Asignar team a tarea
+  Future<void> assignTeamToTask(String taskId, String teamId) async {
+    try {
+      await _firestore.collection('tasks').doc(taskId).update({
+        'teamId': teamId,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+    } catch (e) {
+      throw Exception('Error al asignar team a tarea: $e');
+    }
+  }
+
+  // Actualizar etiquetas de tarea
+  Future<void> updateTaskTags(String taskId, List<String> tags) async {
+    try {
+      await _firestore.collection('tasks').doc(taskId).update({
+        'tags': tags,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+    } catch (e) {
+      throw Exception('Error al actualizar etiquetas: $e');
+    }
+  }
 }

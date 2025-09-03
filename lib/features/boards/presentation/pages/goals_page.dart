@@ -5,6 +5,7 @@ import '../../../auth/presentation/bloc/auth_state.dart';
 import '../../../../core/presentation/bloc/theme_bloc.dart';
 import '../../data/datasources/boards_remote_datasource.dart';
 import '../../data/models/task_model.dart';
+import '../../data/models/sprint_model.dart';
 
 class GoalsPage extends StatefulWidget {
   const GoalsPage({super.key});
@@ -16,6 +17,7 @@ class GoalsPage extends StatefulWidget {
 class _GoalsPageState extends State<GoalsPage> {
   final BoardsRemoteDataSource _dataSource = BoardsRemoteDataSource();
   List<TaskModel> _allTasks = [];
+  SprintModel? _activeSprint;
   bool _isLoading = true;
 
   @override
@@ -42,6 +44,34 @@ class _GoalsPageState extends State<GoalsPage> {
           if (mounted) {
             setState(() {
               _allTasks = tasks;
+            });
+          }
+        });
+
+        // Cargar sprint activo del primer tablero (si existe)
+        _dataSource.getUserBoards(user.user.id).listen((boards) async {
+          if (mounted && boards.isNotEmpty) {
+            try {
+              final activeSprint =
+                  await _dataSource.getActiveSprint(boards.first.id);
+              if (mounted) {
+                setState(() {
+                  _activeSprint = activeSprint;
+                  _isLoading = false;
+                });
+              }
+            } catch (e) {
+              debugPrint('No active sprint found: $e');
+              if (mounted) {
+                setState(() {
+                  _activeSprint = null;
+                  _isLoading = false;
+                });
+              }
+            }
+          } else if (mounted) {
+            setState(() {
+              _activeSprint = null;
               _isLoading = false;
             });
           }
@@ -436,10 +466,79 @@ class _GoalsPageState extends State<GoalsPage> {
   }
 
   Widget _buildSprintProgressChart(bool isDark) {
-    // Simular datos de sprint (en una implementación real, esto vendría de la base de datos)
-    const sprintDays = 14;
-    const currentDay = 7;
-    final sprintProgress = (currentDay / sprintDays * 100).round();
+    // Si no hay sprint activo, mostrar mensaje
+    if (_activeSprint == null) {
+      return Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: isDark ? Colors.grey.shade800 : Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 10,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Progreso del Sprint',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: isDark ? Colors.white : Colors.black87,
+              ),
+            ),
+            const SizedBox(height: 16),
+            Center(
+              child: Column(
+                children: [
+                  Icon(
+                    Icons.speed,
+                    size: 48,
+                    color: isDark ? Colors.grey.shade600 : Colors.grey.shade400,
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    'No hay sprint activo',
+                    style: TextStyle(
+                      fontSize: 16,
+                      color:
+                          isDark ? Colors.grey.shade400 : Colors.grey.shade600,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Crea un sprint para ver el progreso',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color:
+                          isDark ? Colors.grey.shade500 : Colors.grey.shade500,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    // Calcular días transcurridos basado en fechas reales
+    final now = DateTime.now();
+    final startDate = _activeSprint!.startDate;
+    final endDate = _activeSprint!.endDate;
+
+    final totalDays = endDate.difference(startDate).inDays + 1;
+    final currentDay = now.difference(startDate).inDays + 1;
+    final daysRemaining = endDate.difference(now).inDays;
+
+    // Asegurar que currentDay esté dentro del rango del sprint
+    final actualCurrentDay = currentDay.clamp(1, totalDays);
+    final sprintProgress = (actualCurrentDay / totalDays * 100).round();
 
     return Container(
       padding: const EdgeInsets.all(20),
@@ -473,12 +572,26 @@ class _GoalsPageState extends State<GoalsPage> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Día $currentDay de $sprintDays',
+                      'Día $actualCurrentDay de $totalDays',
                       style: TextStyle(
                         fontSize: 14,
                         color: isDark
                             ? Colors.grey.shade400
                             : Colors.grey.shade600,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      daysRemaining > 0
+                          ? '$daysRemaining días restantes'
+                          : 'Sprint finalizado',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: daysRemaining > 0
+                            ? (isDark
+                                ? Colors.grey.shade500
+                                : Colors.grey.shade500)
+                            : Colors.orange,
                       ),
                     ),
                     const SizedBox(height: 8),

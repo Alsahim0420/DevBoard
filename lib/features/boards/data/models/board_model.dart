@@ -4,6 +4,7 @@ class BoardModel {
   final String id;
   final String name;
   final String ownerId;
+  final String? teamId; // ID del equipo al que pertenece el tablero
   final List<String> members;
   final List<String>
       favoritedBy; // Lista de usuarios que marcaron como favorito
@@ -14,6 +15,7 @@ class BoardModel {
     required this.id,
     required this.name,
     required this.ownerId,
+    this.teamId,
     required this.members,
     this.favoritedBy = const [],
     required this.createdAt,
@@ -27,6 +29,7 @@ class BoardModel {
       id: doc.id,
       name: data['name'] ?? '',
       ownerId: data['ownerId'] ?? '',
+      teamId: data['teamId'],
       members: List<String>.from(data['members'] ?? []),
       favoritedBy: List<String>.from(data['favoritedBy'] ?? []),
       createdAt: (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
@@ -39,6 +42,7 @@ class BoardModel {
     return {
       'name': name,
       'ownerId': ownerId,
+      'teamId': teamId,
       'members': members,
       'favoritedBy': favoritedBy,
       'createdAt': Timestamp.fromDate(createdAt),
@@ -50,12 +54,14 @@ class BoardModel {
   factory BoardModel.create({
     required String name,
     required String ownerId,
+    String? teamId,
   }) {
     final now = DateTime.now();
     return BoardModel(
       id: '',
       name: name,
       ownerId: ownerId,
+      teamId: teamId,
       members: [ownerId], // El propietario es automáticamente miembro
       favoritedBy: [],
       createdAt: now,
@@ -68,6 +74,7 @@ class BoardModel {
     String? id,
     String? name,
     String? ownerId,
+    String? teamId,
     List<String>? members,
     List<String>? favoritedBy,
     DateTime? createdAt,
@@ -77,6 +84,7 @@ class BoardModel {
       id: id ?? this.id,
       name: name ?? this.name,
       ownerId: ownerId ?? this.ownerId,
+      teamId: teamId ?? this.teamId,
       members: members ?? this.members,
       favoritedBy: favoritedBy ?? this.favoritedBy,
       createdAt: createdAt ?? this.createdAt,
